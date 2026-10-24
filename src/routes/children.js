@@ -2,10 +2,17 @@ import { json, readJson } from '../http.js';
 
 const CHILD_COLUMNS = 'id, name, birth_date, graduation_date, school_id, parent_id, created_at, updated_at';
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
+const ACCESS_COLUMNS = 'child_id, app_id, granted_by, granted_at, expires_at, is_active';
+
+// Upsert tail for child_app_access grants. Active grants are left untouched
+// (meta.changes = 0); revoked ones are switched back on (meta.changes = 1).
+export const REACTIVATE_ON_CONFLICT = `ON CONFLICT (child_id, app_id) DO UPDATE
+  SET is_active = 1, granted_by = excluded.granted_by, granted_at = CURRENT_TIMESTAMP
+  WHERE child_app_access.is_active = 0`;
 
 // Ownership scope as a SQL fragment, so rows the caller does not own are never
 // read from D1. A school_admin with no school matches nothing (NULL = NULL is false).
-function childScope(user) {
+export function childScope(user) {
   switch (user.role) {
     case 'platform_admin':
       return { clause: '1 = 1', params: [] };
@@ -21,7 +28,7 @@ function childScope(user) {
 // Returns the child if the caller owns it, otherwise a 403/404 Response.
 // The existence check only returns a boolean; no row data leaves D1 for
 // a child the caller does not own.
-async function loadOwnedChild(env, user, id) {
+export async function loadOwnedChild(env, user, id) {
   const scope = childScope(user);
   const child = await env.DB
     .prepare(`SELECT ${CHILD_COLUMNS} FROM children WHERE id = ? AND ${scope.clause}`)
@@ -97,6 +104,32 @@ export async function handleGetChild(request, env, user, id) {
   return child instanceof Response ? child : json(child);
 }
 
+// A grant is live only while is_active = 1 and it has not expired. datetime()
+// normalises ISO-style values ('T', 'Z') so they compare like CURRENT_TIMESTAMP.
+const GRANT_LIVE = 'a.is_active = 1 AND (a.expires_at IS NULL OR datetime(a.expires_at) > CURRENT_TIMESTAMP)';
+
+// Read-only list of a child's grants, joined to app metadata, newest first.
+// ?include_revoked=1 adds revoked and expired grants, each with is_active
+// computed so an expired grant reads as 0.
+export async function handleListChildApps(request, env, user, id) {
+  const child = await loadOwnedChild(env, user, id);
+  if (child instanceof Response) return child;
+
+  const includeRevoked = new URL(request.url).searchParams.get('include_revoked') === '1';
+  const columns = 'a.app_id, p.name, p.category, a.granted_at, a.granted_by, a.expires_at';
+  const sql = includeRevoked
+    ? `SELECT ${columns}, CASE WHEN ${GRANT_LIVE} THEN 1 ELSE 0 END AS is_active
+       FROM child_app_access a JOIN apps p ON p.id = a.app_id
+       WHERE a.child_id = ?
+       ORDER BY a.granted_at DESC, a.id DESC`
+    : `SELECT ${columns}
+       FROM child_app_access a JOIN apps p ON p.id = a.app_id
+       WHERE a.child_id = ? AND ${GRANT_LIVE}
+       ORDER BY a.granted_at DESC, a.id DESC`;
+  const { results } = await env.DB.prepare(sql).bind(child.id).all();
+  return json(results);
+}
+
 export async function handleGrantApp(request, env, user, id) {
   const child = await loadOwnedChild(env, user, id);
   if (child instanceof Response) return child;
@@ -108,16 +141,36 @@ export async function handleGrantApp(request, env, user, id) {
   const app = await env.DB.prepare('SELECT 1 AS found FROM apps WHERE id = ? AND is_active = 1').bind(appId).first();
   if (!app) return json({ error: 'App not found' }, 404);
 
-  // Idempotent on UNIQUE(child_id, app_id): a repeat grant changes nothing.
+  // Idempotent on UNIQUE(child_id, app_id): a repeat grant of an active app
+  // changes nothing. A revoked grant (is_active = 0) is reactivated.
   const result = await env.DB
     .prepare(`INSERT INTO child_app_access (child_id, app_id, granted_by) VALUES (?, ?, ?)
-              ON CONFLICT (child_id, app_id) DO NOTHING`)
+              ${REACTIVATE_ON_CONFLICT}`)
     .bind(child.id, appId, user.id)
     .run();
 
   const access = await env.DB
-    .prepare('SELECT child_id, app_id, granted_by, granted_at, expires_at, is_active FROM child_app_access WHERE child_id = ? AND app_id = ?')
+    .prepare(`SELECT ${ACCESS_COLUMNS} FROM child_app_access WHERE child_id = ? AND app_id = ?`)
     .bind(child.id, appId)
     .first();
   return json(access, result.meta.changes > 0 ? 201 : 200);
+}
+
+// Soft revoke: is_active = 0 keeps the grant row (and its usage history).
+// Revoking an already-revoked grant is a no-op that still returns 200.
+export async function handleRevokeApp(request, env, user, id, appId) {
+  const child = await loadOwnedChild(env, user, id);
+  if (child instanceof Response) return child;
+
+  await env.DB
+    .prepare('UPDATE child_app_access SET is_active = 0 WHERE child_id = ? AND app_id = ? AND is_active != 0')
+    .bind(child.id, appId)
+    .run();
+
+  const access = await env.DB
+    .prepare(`SELECT ${ACCESS_COLUMNS} FROM child_app_access WHERE child_id = ? AND app_id = ?`)
+    .bind(child.id, appId)
+    .first();
+  if (!access) return json({ error: 'App is not granted to this child' }, 404);
+  return json(access);
 }

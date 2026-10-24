@@ -3,15 +3,27 @@ import { describe, it, expect } from "vitest";
 import worker from "../src/worker.js";
 
 describe("Autism App Marketplace Worker API", () => {
-  it("GET / returns system status", async () => {
+  // Phase 3: the status payload moved from / to /api/status; / is now the storefront.
+  it("GET /api/status returns system status", async () => {
+    const request = new Request("http://example.com/api/status");
+    const ctx = createExecutionContext();
+    const response = await worker.fetch(request, env, ctx);
+    await waitOnExecutionContext(ctx);
+
+    expect(response.status).toBe(200);
+    expect(response.headers.get("Content-Type")).toContain("application/json");
+    const body = await response.json();
+    expect(body).toEqual({ name: "Autism App Marketplace API", status: "online" });
+  });
+
+  it("GET / returns the storefront HTML", async () => {
     const request = new Request("http://example.com/");
     const ctx = createExecutionContext();
     const response = await worker.fetch(request, env, ctx);
     await waitOnExecutionContext(ctx);
 
     expect(response.status).toBe(200);
-    const body = await response.json();
-    expect(body.name).toBe("Autism App Marketplace API");
+    expect(response.headers.get("Content-Type")).toContain("text/html");
   });
 
   it("GET /health checks D1 database connection", async () => {

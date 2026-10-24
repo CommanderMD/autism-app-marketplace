@@ -7,8 +7,8 @@
   "scripts": {
     "dev": "wrangler dev",
     "deploy": "wrangler deploy",
-    "migrate:local": "wrangler d1 execute autism-app-marketplace-db --local --file=migrations/001_init.sql && wrangler d1 execute autism-app-marketplace-db --local --file=migrations/002_seed_apps.sql",
-    "migrate:remote": "wrangler d1 execute autism-app-marketplace-db --remote --file=migrations/001_init.sql && wrangler d1 execute autism-app-marketplace-db --remote --file=migrations/002_seed_apps.sql",
+    "migrate:local": "node scripts/migrate.mjs --local",
+    "migrate:remote": "node scripts/migrate.mjs",
     "test": "vitest run"
   },
   "keywords": [

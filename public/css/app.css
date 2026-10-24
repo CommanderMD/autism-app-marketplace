@@ -1,0 +1,410 @@
+/* Autism App Marketplace - the whole stylesheet.
+ *
+ * Design tokens first; everything below uses only tokens.
+ *
+ * Contrast (WCAG 2.x relative luminance). test/ui.test.js recomputes every
+ * line below from the live :root values and fails if a ratio is stale or under
+ * its minimum. `node scripts/contrast.mjs --write` regenerates the table.
+ *
+ *   CONTRAST-TABLE-START
+ *   --text #14181f on --bg #ffffff                                  17.79:1  (min 4.5:1) ok    body text
+ *   --text #14181f on --surface #f6f7f9                             16.60:1  (min 4.5:1) ok    text in cards, table headers
+ *   --text #14181f on --surface-inactive #eceef2                    15.32:1  (min 4.5:1) ok    deactivated table rows, disabled buttons
+ *   --text-muted #4a5462 on --bg #ffffff                            7.68:1  (min 4.5:1) ok    hints, footer
+ *   --text-muted #4a5462 on --surface #f6f7f9                       7.16:1  (min 4.5:1) ok    card meta text
+ *   --text-muted #4a5462 on --surface-inactive #eceef2              6.61:1  (min 4.5:1) ok    meta text in deactivated rows
+ *   --accent #1d4ed8 on --bg #ffffff                                6.70:1  (min 4.5:1) ok    links, secondary buttons
+ *   --accent #1d4ed8 on --surface #f6f7f9                           6.25:1  (min 4.5:1) ok    links inside cards
+ *   --accent-text #ffffff on --accent #1d4ed8                       6.70:1  (min 4.5:1) ok    primary button label
+ *   --accent-text #ffffff on --danger #b3261e                       6.54:1  (min 4.5:1) ok    danger button label
+ *   --danger #b3261e on --bg #ffffff                                6.54:1  (min 4.5:1) ok    error text
+ *   --danger #b3261e on --surface #f6f7f9                           6.10:1  (min 4.5:1) ok    error text in cards, "Inactive" badge
+ *   --danger #b3261e on --surface-inactive #eceef2                  5.63:1  (min 4.5:1) ok    "Inactive" badge on deactivated rows
+ *   --success #1b6b35 on --surface #f6f7f9                          6.12:1  (min 4.5:1) ok    "Active" badge
+ *   --focus #1d4ed8 on --bg #ffffff                                 6.70:1  (min 3:1) ok    focus ring (non-text)
+ *   --focus #1d4ed8 on --surface #f6f7f9                            6.25:1  (min 3:1) ok    focus ring on cards (non-text)
+ *   --border-strong #6b7584 on --bg #ffffff                         4.66:1  (min 3:1) ok    input borders, bar track (non-text)
+ *   --accent #1d4ed8 on --bg #ffffff                                6.70:1  (min 3:1) ok    usage bar fill (non-text)
+ *   CONTRAST-TABLE-END
+ *
+ * Text needs >= 4.5:1. Focus ring, borders of inputs and bar fills are
+ * non-text UI and need >= 3:1 (WCAG 1.4.11).
+ */
+
+:root {
+  --bg: #ffffff;
+  --surface: #f6f7f9;
+  --surface-inactive: #eceef2;
+  --text: #14181f;
+  --text-muted: #4a5462;
+  --border: #c9cfd8;
+  --border-strong: #6b7584;
+  --accent: #1d4ed8;
+  --accent-text: #ffffff;
+  --danger: #b3261e;
+  --success: #1b6b35;
+  --focus: #1d4ed8;
+  --radius: 10px;
+  --space: 8px;
+  --hit: 44px;
+  --motion: 160ms;
+  --font: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  --max: 1100px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :root { --motion: 0ms; }
+  * { animation: none !important; transition: none !important; scroll-behavior: auto !important; }
+}
+
+@media (prefers-contrast: more) {
+  :root {
+    --text-muted: var(--text);
+    --border: var(--text);
+    --border-strong: var(--text);
+    --surface: var(--bg);
+    --surface-inactive: var(--bg);
+  }
+  .card, .panel, input, select, textarea, .btn, button { border-width: 2px; }
+}
+
+/* ---------- base ---------- */
+
+*, *::before, *::after { box-sizing: border-box; }
+
+[hidden] { display: none !important; }
+
+html { color-scheme: light; }
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+  font: 1.0625rem/1.55 var(--font);
+}
+
+h1, h2, h3 { line-height: 1.25; margin: 0 0 calc(var(--space) * 2); }
+h1 { font-size: 1.75rem; }
+h2 { font-size: 1.3rem; }
+h3 { font-size: 1.1rem; }
+p { margin: 0 0 calc(var(--space) * 2); }
+
+a { color: var(--accent); text-underline-offset: 3px; }
+
+:focus-visible {
+  outline: 3px solid var(--focus);
+  outline-offset: 2px;
+}
+
+.visually-hidden {
+  position: absolute !important;
+  width: 1px; height: 1px;
+  margin: -1px; padding: 0; overflow: hidden;
+  clip: rect(0 0 0 0); white-space: nowrap; border: 0;
+}
+
+.skip-link {
+  position: absolute;
+  left: var(--space);
+  top: -100px;
+  background: var(--accent);
+  color: var(--accent-text);
+  padding: var(--space) calc(var(--space) * 2);
+  border-radius: var(--radius);
+  min-height: var(--hit);
+  display: inline-flex;
+  align-items: center;
+  z-index: 10;
+}
+.skip-link:focus { top: var(--space); }
+
+.muted { color: var(--text-muted); }
+
+/* ---------- layout ---------- */
+
+.site-header {
+  border-bottom: 1px solid var(--border);
+  background: var(--bg);
+}
+
+.site-header .inner,
+main,
+.site-footer .inner {
+  max-width: var(--max);
+  margin: 0 auto;
+  padding: 0 calc(var(--space) * 2);
+}
+
+.site-header .inner {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space);
+  padding-top: var(--space);
+  padding-bottom: var(--space);
+}
+
+.brand {
+  font-weight: 700;
+  color: var(--text);
+  text-decoration: none;
+  min-height: var(--hit);
+  display: inline-flex;
+  align-items: center;
+}
+
+.site-nav ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space);
+  align-items: center;
+}
+
+.site-nav a,
+.site-nav button {
+  min-height: var(--hit);
+  min-width: var(--hit);
+  display: inline-flex;
+  align-items: center;
+  padding: 0 calc(var(--space) * 1.5);
+  border-radius: var(--radius);
+}
+
+.site-nav a { color: var(--accent); }
+.site-nav a[aria-current="page"] { font-weight: 700; color: var(--text); }
+
+.page-status {
+  max-width: var(--max);
+  margin: calc(var(--space) * 2) auto 0;
+  padding: 0 calc(var(--space) * 2);
+}
+.page-status:empty { margin-top: 0; min-height: 0; }
+
+main {
+  padding-top: calc(var(--space) * 3);
+  padding-bottom: calc(var(--space) * 6);
+}
+
+.site-footer {
+  border-top: 1px solid var(--border);
+  color: var(--text-muted);
+  font-size: 0.95rem;
+}
+.site-footer .inner { padding-top: calc(var(--space) * 2); padding-bottom: calc(var(--space) * 2); }
+
+.stack > * + * { margin-top: calc(var(--space) * 3); }
+main > section + section,
+main > .panel + section { margin-top: calc(var(--space) * 5); }
+fieldset { margin: 0 0 calc(var(--space) * 2); }
+legend { font-weight: 700; padding: 0 calc(var(--space) / 2); }
+
+.grid {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: calc(var(--space) * 2);
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+}
+
+.card, .panel {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: calc(var(--space) * 2);
+}
+
+.card h2, .card h3 { margin-bottom: var(--space); }
+.card .meta { color: var(--text-muted); margin-bottom: var(--space); }
+
+.dl {
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  gap: var(--space) calc(var(--space) * 2);
+  margin: 0 0 calc(var(--space) * 2);
+}
+.dl dt { color: var(--text-muted); }
+.dl dd { margin: 0; }
+
+/* ---------- controls ---------- */
+
+button, .btn, input, select, textarea {
+  font: inherit;
+  min-height: var(--hit);
+  min-width: var(--hit);
+  border-radius: var(--radius);
+}
+
+button, .btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space);
+  padding: 0 calc(var(--space) * 2);
+  border: 1px solid var(--accent);
+  background: var(--accent);
+  color: var(--accent-text);
+  cursor: pointer;
+  text-decoration: none;
+  transition: background-color var(--motion), color var(--motion);
+}
+
+button.secondary, .btn.secondary {
+  background: var(--bg);
+  color: var(--accent);
+}
+
+button.danger {
+  background: var(--danger);
+  border-color: var(--danger);
+  color: var(--accent-text);
+}
+
+button.link {
+  background: transparent;
+  border-color: transparent;
+  color: var(--accent);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+button[disabled] { cursor: not-allowed; opacity: 1; background: var(--surface-inactive); border-color: var(--border-strong); color: var(--text); }
+
+input, select, textarea {
+  border: 1px solid var(--border-strong);
+  background: var(--bg);
+  color: var(--text);
+  padding: 0 var(--space);
+  max-width: 100%;
+}
+textarea { padding: var(--space); min-height: calc(var(--hit) * 2); width: 100%; }
+
+input[type="checkbox"] {
+  min-height: 0;
+  min-width: 0;
+  width: 22px;
+  height: 22px;
+  margin: 0;
+  accent-color: var(--accent);
+}
+
+input[aria-invalid="true"], select[aria-invalid="true"] { border: 2px solid var(--danger); }
+
+.field { display: flex; flex-direction: column; gap: calc(var(--space) / 2); margin-bottom: calc(var(--space) * 2); }
+.field label { font-weight: 600; }
+.field .hint { color: var(--text-muted); font-size: 0.95rem; }
+.field .error { color: var(--danger); font-weight: 600; }
+.field .error:empty { display: none; }
+
+.form-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space);
+  align-items: flex-end;
+}
+.form-row .field { margin-bottom: 0; }
+
+/* Checkbox rows: the whole label is the 44px hit target. */
+.check {
+  display: flex;
+  align-items: center;
+  gap: var(--space);
+  min-height: var(--hit);
+  min-width: var(--hit);
+  padding: 0 var(--space);
+  border-radius: var(--radius);
+  cursor: pointer;
+}
+.check-list { list-style: none; margin: 0 0 calc(var(--space) * 2); padding: 0; }
+
+.filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space);
+  margin: 0 0 calc(var(--space) * 3);
+  padding: 0;
+  list-style: none;
+}
+.filters button[aria-pressed="false"] { background: var(--bg); color: var(--accent); }
+
+.form-error { color: var(--danger); font-weight: 600; }
+.form-error:empty { display: none; }
+
+.status {
+  min-height: 1.55em;
+  margin: 0 0 calc(var(--space) * 2);
+}
+
+.notice {
+  border-left: 4px solid var(--accent);
+  background: var(--surface);
+  padding: calc(var(--space) * 1.5) calc(var(--space) * 2);
+  border-radius: 0 var(--radius) var(--radius) 0;
+}
+.notice.error { border-left-color: var(--danger); }
+
+.invite-code {
+  font-family: var(--mono);
+  font-size: 1.75rem;
+  letter-spacing: 0.2em;
+  font-weight: 700;
+  display: block;
+  margin: var(--space) 0;
+}
+
+/* ---------- tables ---------- */
+
+.table-scroll {
+  overflow-x: auto;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  margin-bottom: calc(var(--space) * 2);
+}
+
+table { border-collapse: collapse; width: 100%; min-width: 520px; }
+caption { text-align: left; font-weight: 700; padding: var(--space) calc(var(--space) * 1.5); }
+th, td { text-align: left; padding: var(--space) calc(var(--space) * 1.5); border-top: 1px solid var(--border); vertical-align: middle; }
+th { background: var(--surface); }
+td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
+
+tr.is-inactive td { background: var(--surface-inactive); }
+
+.badge {
+  display: inline-block;
+  padding: 0 var(--space);
+  border-radius: var(--radius);
+  border: 1px solid currentColor;
+  font-size: 0.9rem;
+  font-weight: 600;
+}
+.badge.active { color: var(--success); }
+.badge.inactive { color: var(--danger); }
+
+/* ---------- usage bars ---------- */
+
+.bars { list-style: none; margin: 0; padding: 0; }
+.bars li {
+  display: grid;
+  grid-template-columns: 7.5em 1fr 5em;
+  gap: var(--space);
+  align-items: center;
+  min-height: 28px;
+}
+.bar-track { background: var(--bg); border: 1px solid var(--border-strong); border-radius: 4px; height: 14px; }
+.bar-fill { background: var(--accent); height: 100%; border-radius: 3px; transition: width var(--motion); }
+.bars .value { text-align: right; font-variant-numeric: tabular-nums; }
+
+/* ---------- responsive ---------- */
+
+@media (max-width: 640px) {
+  .grid { grid-template-columns: 1fr; }
+  .form-row { flex-direction: column; align-items: stretch; }
+  .dl { grid-template-columns: 1fr; }
+  .dl dd { margin-bottom: var(--space); }
+  h1 { font-size: 1.5rem; }
+}
