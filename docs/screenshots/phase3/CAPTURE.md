@@ -75,3 +75,43 @@ environment cannot create. An operator captures them by hand after deploy.
 Save the files with exactly these names into `docs/screenshots/phase3/`, check
 each one for real personal data (emails, real child names) before committing,
 and commit them on the phase 3 branch.
+
+---
+
+## Capture record — 2026-10-24 (how these four PNGs were actually made)
+
+Captured by Moby, not left to the operator. Environment: `wrangler dev --local`
+on port 8799 against the **local** D1 database, headless system Chrome via
+DevTools Protocol (CDP) at viewport 1280 × 900, device scale 1.
+
+- Session cookies were set through CDP `Network.setCookie` for `__Host-sid`, so
+  each authenticated surface rendered as that user. No cookie was ever placed in
+  a URL or a file that got committed.
+- Fixtures were created through the real HTTP API, never by direct INSERT, except
+  the usage rows (the API has no write endpoint for `app_usage`; those were
+  inserted into **local** D1 only, as this file permits).
+- All names are obviously fake: `Test Parent`, `Test Child A/B`, `Test Child
+  SchA–SchD`, `Test School A`, `admin@example.test`.
+- **Nothing was written to the production database to produce these images.**
+  Production was verified clean afterwards (0 users, 0 children, 0 parents,
+  0 schools, 0 invites, 5 apps).
+
+What each shot shows, verified by reading the rendered DOM text (not by eye):
+
+1. `storefront.png` — signed out. All five apps rendered from `GET /apps`, filter
+   row derived from the data (`All`, `cognition`, `finance`, `learning`, `social`).
+2. `parent.png` — signed in as a parent with two children. Test Child A shows two
+   granted apps with Remove buttons, the 7-day summary ("28 min and 19 activities"),
+   the by-app breakdown and a 7-column by-day bar list. Test Child B shows
+   "No apps granted yet." and "No usage in the last 7 days yet."
+3. `school.png` — signed in as a school admin with four children. Two children were
+   ticked, an app selected, and "Grant to selected children" pressed; the status
+   line reads "Act 1 — Sensory Learning: granted to 2, already had it: 0." and the
+   Apps column went from 1 to 2 for exactly those two rows.
+4. `admin.png` — signed in as the platform admin. `word-builder` is deactivated and
+   renders shaded with the red **Inactive** badge and an **Activate** button, while
+   the other four read **Active**. The Create an app form, the schools table and the
+   assign-school-admin control are visible.
+
+`storefront.png` was captured against the **production** worker (read-only GET, no
+session); the other three came from the local dev server with local data.
