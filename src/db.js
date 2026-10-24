@@ -1,5 +1,7 @@
 export async function getApps(db) {
-  const { results } = await db.prepare("SELECT * FROM apps").all();
+  // Public catalogue: retired apps (is_active = 0) are hidden. The admin view
+  // lists everything via /api/admin/apps.
+  const { results } = await db.prepare("SELECT * FROM apps WHERE is_active = 1").all();
   return results;
 }
 

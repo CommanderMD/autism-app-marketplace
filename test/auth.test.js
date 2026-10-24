@@ -57,10 +57,12 @@ describe("migration 003_auth", () => {
       "idx_app_usage_app",
       "idx_app_usage_child",
       "idx_app_usage_date",
+      "idx_app_usage_unique", // 004
       "idx_child_app_access_app",
       "idx_child_app_access_child",
       "idx_children_parent",
       "idx_children_school",
+      "idx_school_invites_school", // 004
       "idx_users_school",
     ]);
 

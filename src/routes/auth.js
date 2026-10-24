@@ -4,6 +4,7 @@ import {
   createSession, deleteSession, getSessionId, sessionCookie, clearSessionCookie
 } from '../auth/session.js';
 import { getCurrentUser } from '../auth/middleware.js';
+import { checkInvite } from './school.js';
 
 // platform_admin is deliberately absent: it can never be self-registered.
 const SELF_REGISTER_ROLES = ['parent', 'school_admin'];
@@ -39,12 +40,35 @@ export async function handleRegister(request, env) {
     return json({ error: "role must be 'parent' or 'school_admin'" }, 400);
   }
 
+  // Optional invite: joins an existing school instead of creating one.
+  let invite = null;
+  if (body.invite_code !== undefined && body.invite_code !== null) {
+    const checked = await checkInvite(env, body.invite_code, { role, email });
+    if (checked.error) return json({ error: checked.error }, 400);
+    invite = checked.invite;
+  }
+
   const id = crypto.randomUUID();
   const passwordHash = await hashPassword(password);
   const statements = [];
   let schoolId = null;
 
-  if (role === 'school_admin') {
+  if (invite) {
+    // The users insert is conditioned on the invite still being unused, and
+    // the invite is marked used only if that insert happened, all in one
+    // batch (one transaction). Two racing redeems cannot both succeed.
+    schoolId = invite.school_id;
+    statements.push(
+      env.DB.prepare(`INSERT INTO users (id, email, password_hash, role, school_id)
+                      SELECT ?, ?, ?, ?, school_id FROM school_invites
+                      WHERE code = ? AND used_at IS NULL
+                        AND (expires_at IS NULL OR expires_at > CURRENT_TIMESTAMP)`)
+        .bind(id, email, passwordHash, role, invite.code),
+      env.DB.prepare(`UPDATE school_invites SET used_at = CURRENT_TIMESTAMP
+                      WHERE code = ? AND used_at IS NULL AND EXISTS (SELECT 1 FROM users WHERE id = ?)`)
+        .bind(invite.code, id)
+    );
+  } else if (role === 'school_admin') {
     // A school_admin never chooses an existing school_id (that would let anyone
     // claim another school's children). Registration creates a new, empty school.
     schoolId = crypto.randomUUID();
@@ -57,10 +81,12 @@ export async function handleRegister(request, env) {
     );
   }
 
-  statements.push(
-    env.DB.prepare('INSERT INTO users (id, email, password_hash, role, school_id) VALUES (?, ?, ?, ?, ?)')
-      .bind(id, email, passwordHash, role, schoolId)
-  );
+  if (!invite) {
+    statements.push(
+      env.DB.prepare('INSERT INTO users (id, email, password_hash, role, school_id) VALUES (?, ?, ?, ?, ?)')
+        .bind(id, email, passwordHash, role, schoolId)
+    );
+  }
 
   if (role === 'parent') {
     const name = typeof body.name === 'string' && body.name.trim() ? body.name.trim().slice(0, 200) : null;
@@ -70,10 +96,20 @@ export async function handleRegister(request, env) {
   }
 
   try {
-    await env.DB.batch(statements);
+    const results = await env.DB.batch(statements);
+    // Invite lost a race (used or expired since checkInvite). For a parent the
+    // parents insert already failed its FK and rolled the batch back; for a
+    // school_admin nothing was written.
+    if (invite && results[0].meta.changes === 0) {
+      return json({ error: 'Invite code has already been used' }, 400);
+    }
   } catch (err) {
-    if (String(err && err.message).includes('UNIQUE')) {
+    const message = String(err && err.message);
+    if (message.includes('UNIQUE')) {
       return json({ error: 'Email is already registered' }, 409);
+    }
+    if (invite && message.includes('FOREIGN KEY')) {
+      return json({ error: 'Invite code has already been used' }, 400);
     }
     return json({ error: 'Internal error' }, 500);
   }
