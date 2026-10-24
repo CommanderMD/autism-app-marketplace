@@ -13,6 +13,12 @@
       "database_id": "5d6310a8-c1bb-4b5c-ab04-4f2eff5528f2"
     }
   ],
+  "kv_namespaces": [
+    {
+      "binding": "SESSIONS",
+      "id": "50e1713d34f046c0bfe47283f831d51d"
+    }
+  ],
   "observability": {
     "enabled": true
   }
