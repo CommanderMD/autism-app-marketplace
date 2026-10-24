@@ -22,7 +22,7 @@
   "devDependencies": {
     "@cloudflare/vitest-pool-workers": "^0.8.71",
     "miniflare": "^4.20260730.0",
-    "vitest": "^2.1.9",
+    "vitest": "^3.2.7",
     "wrangler": "^4.0.0"
   }
 }
