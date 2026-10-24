@@ -441,3 +441,35 @@ describe("13. routing contract", () => {
     });
   }
 });
+
+// Phase 4 part B: the Act 1 module files must be servable, without opening a
+// route around the gate (the shell/denial assertions above still hold).
+describe("Act 1 module assets", () => {
+  it("/apps/act1/engine/state.js and a lesson module are served as JavaScript, not JSON", async () => {
+    for (const path of ["/apps/act1/engine/state.js", "/apps/act1/lessons/01-shapes.js"]) {
+      const res = await call("GET", path);
+      expect(res.status, path).toBe(200);
+      expect(contentType(res), path).toContain("javascript");
+      expect(await res.text(), path).toContain("export");
+    }
+    const dev = await call("GET", "/apps/act1/dev");
+    expect(dev.status).toBe(200);
+    expect(contentType(dev)).toContain("text/html");
+    expect(await dev.text()).toContain("DEBUG HARNESS");
+  });
+
+  it("the asset rule does not open the gated pages, even encoded or dotted", async () => {
+    for (const path of ["/apps/act1/denied", "/apps/act1/%64enied", "/apps/act1/engine/../denied", "/apps/act1/engine/%2e%2e/index.html"]) {
+      const res = await call("GET", path);
+      expect(res.status, path).toBe(404);
+      expect(contentType(res), path).toContain("application/json");
+    }
+  });
+
+  it("/apps/word-builder/engine/state.js is still a JSON 404", async () => {
+    const res = await call("GET", "/apps/word-builder/engine/state.js");
+    expect(res.status).toBe(404);
+    expect(contentType(res)).toContain("application/json");
+    expect(await res.json()).toEqual({ error: "Not Found" });
+  });
+});
