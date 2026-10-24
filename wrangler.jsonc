@@ -19,6 +19,12 @@
       "id": "50e1713d34f046c0bfe47283f831d51d"
     }
   ],
+  "assets": {
+    "directory": "./public",
+    "binding": "ASSETS",
+    "not_found_handling": "single-page-application",
+    "run_worker_first": true
+  },
   "observability": {
     "enabled": true
   }
