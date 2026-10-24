@@ -14,8 +14,9 @@ import { el, replace } from '/js/ui.js';
 import { CANONICAL_ORDER } from '../engine/lesson.js';
 import { initialState, reduce, currentLesson, currentStep, unlockedIds } from '../engine/state.js';
 import { createRewardPlayer } from './reward-player.js';
-import { createSettingsPanel, resolveInitial, readLocal, applyToDocument, APP_ID } from './settings-panel.js';
+import { createSettingsPanel, resolveInitial, readLocal, applyToDocument, APP_ID, readGuidePref, writeGuidePref } from './settings-panel.js';
 import { svgNode } from './svg-dom.js';
+import { createCompanion, preloadGuide, celebrationRow, arrivalLine, GUIDE_NAME } from './companion.js';
 
 const LESSON_ID_RE = /^[a-z0-9-]+$/;
 const MAX_SECONDS = 600;
@@ -37,6 +38,7 @@ function grownUpPanel() {
 
 const speech = {
   unlocked: false,
+  onSpeaking: null, // (bool) => void, set by the app so the guide can mouth along
   speak(text) {
     if (!this.unlocked || !('speechSynthesis' in globalThis) || !text) return;
     try {
@@ -44,6 +46,9 @@ const speech = {
       const u = new SpeechSynthesisUtterance(text);
       u.lang = 'en-US';
       u.rate = 0.9;
+      u.onstart = () => this.onSpeaking && this.onSpeaking(true);
+      u.onend = () => this.onSpeaking && this.onSpeaking(false);
+      u.onerror = () => this.onSpeaking && this.onSpeaking(false);
       speechSynthesis.speak(u);
     } catch { /* no voices available */ }
   },
@@ -107,6 +112,12 @@ function createApp({ childId, settings: initialSettings, completed }) {
   let picks = [];               // sequence mode picks / drag mode placed ids
   let selectedDragId = null;    // tap-fallback for drag
   let rewarding = false;        // true while a task reward plays; Next waits
+  // The guide character. Shown unless the adult turns it off on this device
+  // (a device preference, not a child setting: nothing about the child is stored).
+  let showGuide = readGuidePref();
+  const guide = createCompanion({ animationsOn: () => settings.animations !== false && !prefersReducedMotion });
+  speech.onSpeaking = (on) => guide.setSpeaking(on);
+  if (showGuide) preloadGuide();
 
   const player = createRewardPlayer({ root: document.body, settings, prefersReducedMotion });
   const panel = createSettingsPanel({
@@ -118,6 +129,12 @@ function createApp({ childId, settings: initialSettings, completed }) {
       if (state) dispatch({ type: 'SET_SETTINGS', settings: next });
     },
     onTestSound() { player.unlockAudio(); player.testTone(); },
+    guideShown: showGuide,
+    onToggleGuide(on) {
+      showGuide = on;
+      writeGuidePref(on);
+      render(false);
+    },
   });
   document.body.append(panel.panel);
 
@@ -187,6 +204,7 @@ function createApp({ childId, settings: initialSettings, completed }) {
         const lesson = currentLesson(state);
         const step = currentStep(state);
         reportStep(lesson, step, state.stepIndex, false);
+        guide.setState('happy');
         rewarding = true;
         render(false);
         const snapshot = state;
@@ -198,6 +216,7 @@ function createApp({ childId, settings: initialSettings, completed }) {
       }
       render(false);
       shakeChoice(action);
+      guide.setState('nod');
       return;
     }
 
@@ -205,6 +224,7 @@ function createApp({ childId, settings: initialSettings, completed }) {
       if (state.lessonComplete) {
         const lesson = currentLesson(state);
         reportStep(lesson, lesson.steps[state.stepIndex], state.stepIndex, true);
+        guide.setState('cheer');
         renderComplete();
         await player.play('lesson');
         return;
@@ -252,7 +272,10 @@ function createApp({ childId, settings: initialSettings, completed }) {
     replay.addEventListener('click', () => { speech.unlocked = true; speech.speak(view.audio); });
     const feedback = el('p', { class: 'feedback', id: 'feedback' },
       state.status === 'wrong' ? 'Try again.' : state.status === 'correct' ? 'Yes!' : '');
-    return el('section', { class: 'prompt-row' },
+    if (showGuide && state.status === 'correct') feedback.textContent = `Yes! ${GUIDE_NAME} is happy.`;
+    const slot = showGuide ? guide.el : el('div', { class: 'companion-slot is-empty', 'aria-hidden': 'true' });
+    return el('section', { class: `prompt-row${showGuide ? ' has-guide' : ''}` },
+      slot,
       el('div', {}, el('p', { class: 'prompt', id: 'prompt' }, view.prompt), feedback),
       replay);
   }
@@ -420,7 +443,11 @@ function createApp({ childId, settings: initialSettings, completed }) {
     const area = view.mode === 'drag' ? dragArea(view) : view.mode === 'sequence' ? sequenceArea(view) : tapArea(view);
     replace(main, topbar(lesson, view), promptRow(view), area, bottomBar(view));
 
-    if (newStep) speech.speak(view.audio);
+    if (newStep) {
+      guide.setState('point');
+      speech.speak(view.audio);
+      setTimeout(() => guide.setState('listen'), 1500);
+    }
   }
 
   function renderComplete() {
@@ -444,13 +471,17 @@ function createApp({ childId, settings: initialSettings, completed }) {
         }
       });
     }
+    const completedCount = state.completed.length;
+    const arrival = showGuide ? arrivalLine(completedCount) : null;
     replace(main,
       el('header', { class: 'topbar' }, el('h1', { class: 'lesson-title' }, `Lesson ${lesson.order}: ${lesson.title}`)),
       el('section', { class: 'panel' },
+        showGuide ? celebrationRow(completedCount) : null,
         el('h2', {}, 'You did it!'),
         el('p', {}, `${stepsDone} of ${stepsDone} done.`),
+        arrival ? el('p', { class: 'arrival' }, arrival) : null,
         nextBtn));
-    speech.speak('You did it!');
+    speech.speak(arrival ? `You did it! ${arrival}` : 'You did it!');
   }
 
   return { start };

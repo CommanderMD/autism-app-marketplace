@@ -63,7 +63,7 @@ await page.mouse.up();
 await page.waitForFunction(() => document.querySelectorAll('.drop-zone .placed .drag-item').length === 3);
 await page.screenshot({ path: `${OUT}/lesson2-drag.png` });
 await page.click('.next'); // Check with 3
-await page.waitForFunction(() => document.querySelector('#feedback')?.textContent === 'Yes!');
+await page.waitForFunction(() => (document.querySelector('#feedback')?.textContent || '').startsWith('Yes!'));
 results.dragCorrect = true;
 
 // ---- SEQUENCE: complete lessons 2..7, open lesson 8.
@@ -90,7 +90,7 @@ const answer = await page.evaluate(async () => {
 for (const c of answer) await page.click(`.sequence-area .choice[data-choice="${c}"]`);
 await page.screenshot({ path: `${OUT}/lesson8-sequence.png` });
 await page.click('.next');
-await page.waitForFunction(() => document.querySelector('#feedback')?.textContent === 'Yes!');
+await page.waitForFunction(() => (document.querySelector('#feedback')?.textContent || '').startsWith('Yes!'));
 results.sequenceCorrect = true;
 
 results.errors = errors;

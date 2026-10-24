@@ -159,6 +159,22 @@ describe("Act 1 shell assets", () => {
     expect(html).not.toContain('name="child-id"');
   });
 
+  it("10. the companion sprites are served and companion.js stays frame-swap-only", async () => {
+    for (const f of ["robot-01-idle", "robot-02-blink", "robot-04-point", "robot-06-nod", "robot-08-cheer", "owl-02-happy", "otter-02-happy"]) {
+      const res = await call("GET", `/img/act1/${f}.png`);
+      expect(res.status, f).toBe(200);
+      expect(contentType(res), f).toContain("image/png");
+    }
+    const js = await text("/apps/act1/js/companion.js");
+    expect(js).toContain("GUIDE_NAME = 'Moby'");
+    expect(js).not.toContain("Math.random");
+    expect(js).not.toContain("setInterval");
+    expect(js).not.toMatch(/style\.(background|filter|opacity)/); // frame swaps and CSS transforms only
+    expect(js).not.toMatch(/child_id|childId|child-id/); // the companion never sees a child id
+    const css = await text("/apps/act1/css/app.css");
+    expect(css).toMatch(/@keyframes companion-breathe[^}]*\{[^}]*transform/);
+  });
+
   it("9. the parent dashboard and app detail launch through the gate URL, never the app folder", async () => {
     const parent = await text("/js/views/parent.js");
     expect(parent).toContain("/play?child_id=");

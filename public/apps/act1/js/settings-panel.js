@@ -19,6 +19,16 @@ import { api } from '/js/api.js';
 import { el, replace } from '/js/ui.js';
 
 export const STORAGE_KEY = 'act1.settings.v1';
+export const GUIDE_KEY = 'act1.guide.v1';
+
+// Device-only preference: whether the guide character is shown. Never sent
+// to the server and never tied to the child.
+export function readGuidePref() {
+  try { return localStorage.getItem(GUIDE_KEY) !== 'off'; } catch { return true; }
+}
+export function writeGuidePref(on) {
+  try { localStorage.setItem(GUIDE_KEY, on ? 'on' : 'off'); } catch { /* ignore */ }
+}
 export const DEBOUNCE_MS = 400;
 export const APP_ID = 'act1-sensory-learning';
 
@@ -87,7 +97,7 @@ export function applyToDocument(s) {
   root.style.setProperty('--anim-speed', String(speed));
 }
 
-export function createSettingsPanel({ childId, initial, onChange, onTestSound }) {
+export function createSettingsPanel({ childId, initial, onChange, onTestSound, guideShown = true, onToggleGuide }) {
   let settings = { ...DEFAULT_SETTINGS, ...pick(initial || {}) };
   let pending = {};
   let timer = null;
@@ -158,6 +168,12 @@ export function createSettingsPanel({ childId, initial, onChange, onTestSound })
   safeMode.checked = settings.safe_mode !== false;
   safeMode.addEventListener('change', () => update({ safe_mode: safeMode.checked === true }));
 
+  // Device-only preference: whether the guide character is shown. Not sent to
+  // the server and not tied to the child.
+  const guideBox = el('input', { type: 'checkbox', id: 'set-guide' });
+  guideBox.checked = guideShown !== false;
+  guideBox.addEventListener('change', () => onToggleGuide && onToggleGuide(guideBox.checked === true));
+
   const close = el('button', { type: 'button', class: 'text-btn' }, 'Close');
 
   const panel = el('aside', { class: 'settings-panel', role: 'dialog', 'aria-modal': 'false', 'aria-labelledby': 'settings-title', hidden: true },
@@ -176,6 +192,9 @@ export function createSettingsPanel({ childId, initial, onChange, onTestSound })
       el('div', { class: 'check' }, contrastNormal, el('label', { for: 'set-contrast-normal' }, 'Normal')),
       el('div', { class: 'check' }, contrastHigh, el('label', { for: 'set-contrast-high' }, 'High'))),
     el('div', { class: 'check' }, animations, el('label', { for: 'set-animations' }, 'Animations on')),
+    el('div', { class: 'row' },
+      el('div', { class: 'check' }, guideBox, el('label', { for: 'set-guide' }, 'Show Moby, the helper')),
+      el('p', { class: 'note' }, 'Turn off for a plainer screen. This is remembered on this device only.')),
     el('div', { class: 'row' },
       el('div', { class: 'check' }, safeMode, el('label', { for: 'set-safe' }, 'Photosensitivity safe mode')),
       el('p', { class: 'note' }, 'Keeps flashing and big colour changes off. Leave this on unless you know it is safe for this child.')),

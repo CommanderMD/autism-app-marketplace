@@ -18,6 +18,12 @@ written there.
   drag for the third), after a wrong count had shown "Try again."
 - `lesson8-sequence.png` — sequence mode after "Start over", correct order
   filled in.
+- `lesson3-otter-arrives.png` — the first earned friend: Otter joins Moby on the
+  lesson-complete panel after the third completed lesson (Owla after the sixth).
+
+The companion sprites in `public/img/act1/` were cut from one approved
+character sheet (Moby ×9 poses, Owla ×2, Otter ×2) so every pose shares the
+same proportions, then quantised to 128 colours at 360px.
 
 To reproduce:
 

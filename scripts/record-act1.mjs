@@ -83,7 +83,7 @@ async function answerCurrentStep({ missFirst = false } = {}) {
     await page.screenshot({ path: join(OUT, 'lesson1-try-again-reveal.png') });
   }
   await page.click(`.choice[data-choice="${target}"]`);
-  await page.waitForFunction(() => document.querySelector('#feedback')?.textContent === 'Yes!');
+  await page.waitForFunction(() => (document.querySelector('#feedback')?.textContent || '').startsWith('Yes!'));
   mark(`correct: ${target}`);
   // Next is enabled only after the task reward has played.
   await page.waitForSelector('.next:not([disabled])', { timeout: 5000 });
