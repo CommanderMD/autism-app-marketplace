@@ -106,7 +106,7 @@ export async function handleGetChild(request, env, user, id) {
 
 // A grant is live only while is_active = 1 and it has not expired. datetime()
 // normalises ISO-style values ('T', 'Z') so they compare like CURRENT_TIMESTAMP.
-const GRANT_LIVE = 'a.is_active = 1 AND (a.expires_at IS NULL OR datetime(a.expires_at) > CURRENT_TIMESTAMP)';
+export const GRANT_LIVE = 'a.is_active = 1 AND (a.expires_at IS NULL OR datetime(a.expires_at) > CURRENT_TIMESTAMP)';
 
 // Read-only list of a child's grants, joined to app metadata, newest first.
 // ?include_revoked=1 adds revoked and expired grants, each with is_active
