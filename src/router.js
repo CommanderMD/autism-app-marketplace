@@ -3,7 +3,7 @@ import { json, serveAsset } from './http.js';
 import { handleGetApps, handleGetAppById } from './routes/apps.js';
 import { handleRegister, handleLogin, handleLogout, handleMe } from './routes/auth.js';
 import {
-  handleCreateChild, handleListChildren, handleGetChild, handleGrantApp, handleRevokeApp
+  handleCreateChild, handleListChildren, handleGetChild, handleListChildApps, handleGrantApp, handleRevokeApp
 } from './routes/children.js';
 import { handleUsageSummary, handleUsageCsv } from './routes/usage.js';
 import { handleBulkGrant, handleCreateInvite, handleRedeemInvite } from './routes/school.js';
@@ -131,8 +131,10 @@ async function handleApi(request, env, path, method) {
 
   const childAppsMatch = path.match(/^\/api\/children\/([^/]+)\/apps$/);
   if (childAppsMatch) {
-    if (method !== 'POST') return methodNotAllowed('POST');
-    return handleGrantApp(request, env, user, decodeURIComponent(childAppsMatch[1]));
+    const childId = decodeURIComponent(childAppsMatch[1]);
+    if (method === 'GET') return handleListChildApps(request, env, user, childId);
+    if (method === 'POST') return handleGrantApp(request, env, user, childId);
+    return methodNotAllowed('GET, POST');
   }
 
   const childMatch = path.match(/^\/api\/children\/([^/]+)$/);

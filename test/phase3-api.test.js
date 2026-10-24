@@ -223,6 +223,97 @@ describe("DELETE /api/children/:id/apps/:appId", () => {
   });
 });
 
+describe("GET /api/children/:id/apps", () => {
+  async function grant(cookie, childId, appId) {
+    const res = await call("POST", `/api/children/${childId}/apps`, { cookie, body: { app_id: appId } });
+    expect(res.status).toBe(201);
+  }
+
+  async function listApps(cookie, childId, query = "") {
+    const res = await call("GET", `/api/children/${childId}/apps${query}`, { cookie });
+    expect(res.status).toBe(200);
+    return res.json();
+  }
+
+  it("lists active grants joined to app metadata; include_revoked shows revoked rows with is_active 0", async () => {
+    const { user, cookie } = await registerAndLogin("parent.la@example.test");
+    const child = await createChild(cookie, "Test Child L");
+    await grant(cookie, child.id, "money-bingo");
+    await grant(cookie, child.id, "word-builder");
+
+    const both = await listApps(cookie, child.id);
+    expect(both).toHaveLength(2);
+    const byId = Object.fromEntries(both.map((a) => [a.app_id, a]));
+    expect(byId["money-bingo"]).toMatchObject({ name: "Money Bingo", category: "finance", granted_by: user.id, expires_at: null });
+    expect(byId["word-builder"]).toMatchObject({ name: "Word Builder", category: "cognition", granted_by: user.id, expires_at: null });
+    expect(byId["money-bingo"].granted_at).toMatch(/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/);
+    expect(Object.keys(byId["money-bingo"]).sort()).toEqual(["app_id", "category", "expires_at", "granted_at", "granted_by", "name"]);
+
+    expect((await call("DELETE", `/api/children/${child.id}/apps/money-bingo`, { cookie })).status).toBe(200);
+
+    const active = await listApps(cookie, child.id);
+    expect(active.map((a) => a.app_id)).toEqual(["word-builder"]);
+
+    const all = await listApps(cookie, child.id, "?include_revoked=1");
+    expect(all).toHaveLength(2);
+    const allById = Object.fromEntries(all.map((a) => [a.app_id, a]));
+    expect(allById["money-bingo"].is_active).toBe(0);
+    expect(allById["word-builder"].is_active).toBe(1);
+  });
+
+  it("another parent 403, unknown child 404, no cookie 401, GET/POST only", async () => {
+    const { cookie: cookieA } = await registerAndLogin("parent.lb@example.test");
+    const { cookie: cookieB } = await registerAndLogin("parent.lc@example.test");
+    const child = await createChild(cookieA, "Test Child M");
+    await grant(cookieA, child.id, "money-bingo");
+
+    const other = await call("GET", `/api/children/${child.id}/apps`, { cookie: cookieB });
+    expect(other.status).toBe(403);
+    expect(await other.text()).not.toContain("money-bingo");
+    const otherAll = await call("GET", `/api/children/${child.id}/apps?include_revoked=1`, { cookie: cookieB });
+    expect(otherAll.status).toBe(403);
+
+    expect((await call("GET", "/api/children/does-not-exist/apps", { cookie: cookieA })).status).toBe(404);
+    expect((await call("GET", `/api/children/${child.id}/apps`)).status).toBe(401);
+
+    const put = await call("PUT", `/api/children/${child.id}/apps`, { cookie: cookieA });
+    expect(put.status).toBe(405);
+    expect(put.headers.get("Allow")).toBe("GET, POST");
+  });
+
+  it("a child with no grants is [] with 200", async () => {
+    const { cookie } = await registerAndLogin("parent.ld@example.test");
+    const child = await createChild(cookie, "Test Child N");
+    expect(await listApps(cookie, child.id)).toEqual([]);
+    expect(await listApps(cookie, child.id, "?include_revoked=1")).toEqual([]);
+  });
+
+  it("an expired grant is absent by default and present (is_active 0) with include_revoked", async () => {
+    const { cookie } = await registerAndLogin("parent.le@example.test");
+    const child = await createChild(cookie, "Test Child E");
+    await grant(cookie, child.id, "money-bingo");
+    await grant(cookie, child.id, "word-builder");
+    await env.DB
+      .prepare("UPDATE child_app_access SET expires_at = datetime('now', '-1 minute') WHERE child_id = ? AND app_id = 'money-bingo'")
+      .bind(child.id)
+      .run();
+    await env.DB
+      .prepare("UPDATE child_app_access SET expires_at = datetime('now', '+1 day') WHERE child_id = ? AND app_id = 'word-builder'")
+      .bind(child.id)
+      .run();
+
+    const active = await listApps(cookie, child.id);
+    expect(active.map((a) => a.app_id)).toEqual(["word-builder"]);
+    expect(active[0].expires_at).not.toBeNull();
+
+    const all = await listApps(cookie, child.id, "?include_revoked=1");
+    const expired = all.find((a) => a.app_id === "money-bingo");
+    expect(expired).toBeDefined();
+    expect(expired.is_active).toBe(0);
+    expect(all.find((a) => a.app_id === "word-builder").is_active).toBe(1);
+  });
+});
+
 describe("POST /api/school/children/apps (bulk grant)", () => {
   it("grants, is idempotent, and rejects other schools' children without inserting anything", async () => {
     const { cookie: adminCookie1 } = await registerAndLogin("admin.b1@example.test", "school_admin", { school_name: "Test School B1" });

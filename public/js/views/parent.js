@@ -3,7 +3,7 @@
 // than patching local state.
 import { api } from '../api.js';
 import { requireRole } from '../session.js';
-import { el, replace, field, setFieldError, liveRegion, announce, busy, notice, uniqueId } from '../ui.js';
+import { el, replace, field, setFieldError, liveRegion, announce, busy, notice, uniqueId, table } from '../ui.js';
 
 const DAY_MS = 86_400_000;
 
@@ -47,6 +47,15 @@ function usage(summary) {
     })));
 }
 
+// granted_at is a UTC 'YYYY-MM-DD HH:MM:SS' timestamp; only the date is shown.
+function grantedLabel(grantedAt) {
+  const date = String(grantedAt || '').slice(0, 10);
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) return '-';
+  return new Date(`${date}T00:00:00Z`).toLocaleDateString('en-GB', {
+    day: 'numeric', month: 'short', year: 'numeric', timeZone: 'UTC',
+  });
+}
+
 function appOptions(apps) {
   return apps.map((a) => ({ value: a.id, label: a.name }));
 }
@@ -60,14 +69,23 @@ export async function render({ main, setTitle }) {
   const live = liveRegion();
   const list = el('div', { class: 'stack' });
 
-  async function refresh(focusSelector) {
+  // focus: a selector, or a list of selectors tried in order (the first one
+  // that matches after the re-render gets focus).
+  async function refresh(focus) {
     const [children, apps] = await Promise.all([api('/api/children'), api('/apps')]);
-    const summaries = await Promise.all(children.map((c) =>
-      api(`/api/usage/summary?child_id=${encodeURIComponent(c.id)}`).catch((err) => err)));
+    const [summaries, granted] = await Promise.all([
+      Promise.all(children.map((c) =>
+        api(`/api/usage/summary?child_id=${encodeURIComponent(c.id)}`).catch((err) => err))),
+      Promise.all(children.map((c) =>
+        api(`/api/children/${encodeURIComponent(c.id)}/apps`).catch((err) => err))),
+    ]);
     replace(list, children.length
-      ? children.map((child, i) => childCard(child, summaries[i], apps))
+      ? children.map((child, i) => childCard(child, summaries[i], granted[i], apps))
       : el('p', {}, 'No children added yet. Use the form above to add one.'));
-    if (focusSelector) list.querySelector(focusSelector)?.focus();
+    for (const selector of [focus].flat().filter(Boolean)) {
+      const target = list.querySelector(selector);
+      if (target) { target.focus(); break; }
+    }
   }
 
   // Runs a mutation, announces the result, and re-fetches from the API.
@@ -83,47 +101,73 @@ export async function render({ main, setTitle }) {
     });
   }
 
-  function childCard(child, summary, apps) {
+  // The child's active grants, each row with its own Remove button.
+  function grantedApps(child, granted, sel) {
+    if (granted instanceof Error) return notice(`Apps could not be loaded: ${granted.message}`, { error: true });
+    if (granted.length === 0) return el('p', {}, 'No apps granted yet.');
+
+    function removeButton(app) {
+      const button = el('button', { type: 'button', class: 'danger', 'aria-label': `Remove ${app.name} from ${child.name}` }, 'Remove');
+      button.addEventListener('click', () => {
+        if (!confirm(`Remove ${app.name} from ${child.name}?`)) {
+          announce(live, 'Nothing was removed.');
+          return;
+        }
+        mutate(button, async () => {
+          await api(`/api/children/${encodeURIComponent(child.id)}/apps/${encodeURIComponent(app.app_id)}`, { method: 'DELETE' });
+          return `${app.name} removed from ${child.name}.`;
+        }, [`${sel} [data-apps-heading]`]);
+      });
+      return button;
+    }
+
+    return table({
+      caption: `Apps ${child.name} can use`,
+      columns: [
+        { label: 'App', key: 'name' },
+        { label: 'Category', key: 'category' },
+        { label: 'Granted', render: (a) => grantedLabel(a.granted_at) },
+        { label: 'Action', render: removeButton },
+      ],
+      rows: granted,
+    });
+  }
+
+  function childCard(child, summary, granted, apps) {
     const sel = `[data-child="${CSS.escape(child.id)}"]`;
     const headingId = uniqueId('child');
 
-    const grant = field({ label: 'App to grant', name: 'grant-app', kind: 'select', options: appOptions(apps) });
-    const grantButton = el('button', { type: 'submit' }, 'Grant');
-    const grantForm = el('form', { class: 'form-row' }, grant.wrap, grantButton);
-    grantForm.addEventListener('submit', (event) => {
-      event.preventDefault();
-      const appName = grant.input.selectedOptions[0]?.textContent;
-      mutate(grantButton, async () => {
-        await api(`/api/children/${encodeURIComponent(child.id)}/apps`, { method: 'POST', body: { app_id: grant.input.value } });
-        return `${appName} granted to ${child.name}.`;
-      }, `${sel} select[name="grant-app"]`);
-    });
+    // Only offer apps the child does not already have. If the grant list
+    // failed to load, offer everything: a repeat grant is a harmless no-op.
+    const have = new Set(granted instanceof Error ? [] : granted.map((g) => g.app_id));
+    const grantable = apps.filter((a) => !have.has(a.id));
 
-    const revoke = field({ label: 'App to remove', name: 'revoke-app', kind: 'select', options: appOptions(apps) });
-    const revokeButton = el('button', { type: 'submit', class: 'danger' }, 'Remove access');
-    const revokeForm = el('form', { class: 'form-row' }, revoke.wrap, revokeButton);
-    revokeForm.addEventListener('submit', (event) => {
-      event.preventDefault();
-      const appName = revoke.input.selectedOptions[0]?.textContent;
-      if (!confirm(`Remove ${appName} from ${child.name}?`)) {
-        announce(live, 'Nothing was removed.');
-        return;
-      }
-      mutate(revokeButton, async () => {
-        await api(`/api/children/${encodeURIComponent(child.id)}/apps/${encodeURIComponent(revoke.input.value)}`, { method: 'DELETE' });
-        return `${appName} removed from ${child.name}.`;
-      }, `${sel} select[name="revoke-app"]`);
-    });
+    let grantArea;
+    if (grantable.length === 0) {
+      grantArea = el('p', {}, 'This child has every app in the catalogue.');
+    } else {
+      const grant = field({ label: 'App to grant', name: 'grant-app', kind: 'select', options: appOptions(grantable) });
+      const grantButton = el('button', { type: 'submit' }, 'Grant');
+      grantArea = el('form', { class: 'form-row' }, grant.wrap, grantButton);
+      grantArea.addEventListener('submit', (event) => {
+        event.preventDefault();
+        const appName = grant.input.selectedOptions[0]?.textContent;
+        mutate(grantButton, async () => {
+          await api(`/api/children/${encodeURIComponent(child.id)}/apps`, { method: 'POST', body: { app_id: grant.input.value } });
+          return `${appName} granted to ${child.name}.`;
+        }, [`${sel} select[name="grant-app"]`, `${sel} [data-apps-heading]`]);
+      });
+    }
 
     return el('section', { class: 'card', dataset: { child: child.id }, 'aria-labelledby': headingId },
       el('h2', { id: headingId, tabindex: '-1' }, child.name),
       el('dl', { class: 'dl' }, el('dt', {}, 'Birth date'), el('dd', {}, child.birth_date || 'not set')),
-      el('h3', {}, 'Last 7 days'),
-      usage(summary),
+      el('h3', { tabindex: '-1', dataset: { appsHeading: '' } }, 'Apps'),
+      grantedApps(child, granted, sel),
       el('h3', {}, 'Give an app'),
-      grantForm,
-      el('h3', {}, 'Remove an app'),
-      revokeForm);
+      grantArea,
+      el('h3', {}, 'Last 7 days'),
+      usage(summary));
   }
 
   // Add child form. API validation errors are shown next to the field they name.

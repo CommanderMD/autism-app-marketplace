@@ -104,6 +104,32 @@ export async function handleGetChild(request, env, user, id) {
   return child instanceof Response ? child : json(child);
 }
 
+// A grant is live only while is_active = 1 and it has not expired. datetime()
+// normalises ISO-style values ('T', 'Z') so they compare like CURRENT_TIMESTAMP.
+const GRANT_LIVE = 'a.is_active = 1 AND (a.expires_at IS NULL OR datetime(a.expires_at) > CURRENT_TIMESTAMP)';
+
+// Read-only list of a child's grants, joined to app metadata, newest first.
+// ?include_revoked=1 adds revoked and expired grants, each with is_active
+// computed so an expired grant reads as 0.
+export async function handleListChildApps(request, env, user, id) {
+  const child = await loadOwnedChild(env, user, id);
+  if (child instanceof Response) return child;
+
+  const includeRevoked = new URL(request.url).searchParams.get('include_revoked') === '1';
+  const columns = 'a.app_id, p.name, p.category, a.granted_at, a.granted_by, a.expires_at';
+  const sql = includeRevoked
+    ? `SELECT ${columns}, CASE WHEN ${GRANT_LIVE} THEN 1 ELSE 0 END AS is_active
+       FROM child_app_access a JOIN apps p ON p.id = a.app_id
+       WHERE a.child_id = ?
+       ORDER BY a.granted_at DESC, a.id DESC`
+    : `SELECT ${columns}
+       FROM child_app_access a JOIN apps p ON p.id = a.app_id
+       WHERE a.child_id = ? AND ${GRANT_LIVE}
+       ORDER BY a.granted_at DESC, a.id DESC`;
+  const { results } = await env.DB.prepare(sql).bind(child.id).all();
+  return json(results);
+}
+
 export async function handleGrantApp(request, env, user, id) {
   const child = await loadOwnedChild(env, user, id);
   if (child instanceof Response) return child;

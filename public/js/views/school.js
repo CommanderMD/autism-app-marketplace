@@ -4,7 +4,7 @@ import { api } from '../api.js';
 import { requireRole } from '../session.js';
 import { el, replace, field, liveRegion, announce, busy, notice, table } from '../ui.js';
 
-function rosterForm(children, apps) {
+function rosterForm(children, apps, onGranted) {
   const live = liveRegion();
   if (children.length === 0) {
     return el('div', {}, el('p', {}, 'No children on your roster yet.'));
@@ -55,19 +55,32 @@ function rosterForm(children, apps) {
         announce(live, `${appName}: granted to ${res.granted}, already had it: ${res.already_granted}.`);
       } catch (err) {
         announce(live, err.message);
+        return;
       }
+      await onGranted().catch((err) => announce(live, `Granted, but the usage table could not refresh: ${err.message}`));
     });
   });
 
   return form;
 }
 
+// Active grant counts for the first APP_COUNT_LIMIT children, one request
+// each; children beyond the cap, or whose request fails, show '—'.
+const APP_COUNT_LIMIT = 50;
+
+async function appCounts(children) {
+  const counts = await Promise.all(children.slice(0, APP_COUNT_LIMIT).map((c) =>
+    api(`/api/children/${encodeURIComponent(c.id)}/apps`).then((apps) => apps.length, () => '—')));
+  return children.map((_, i) => (i < counts.length ? counts[i] : '—'));
+}
+
 // Every roster child gets a row, so a child with no usage shows 0 rather than
 // silently disappearing from the table.
-function usageTable(children, summary) {
+function usageTable(children, summary, counts) {
   const byChild = new Map(summary.by_child.map((r) => [r.child_id, r]));
-  const rows = children.map((c) => ({
+  const rows = children.map((c, i) => ({
     name: c.name,
+    apps: counts[i],
     minutes: byChild.get(c.id)?.minutes || 0,
     activities: byChild.get(c.id)?.activities || 0,
   }));
@@ -78,6 +91,7 @@ function usageTable(children, summary) {
         caption: 'Usage per child, last 7 days',
         columns: [
           { label: 'Child', key: 'name' },
+          { label: 'Apps', key: 'apps', num: true },
           { label: 'Minutes', key: 'minutes', num: true },
           { label: 'Activities', key: 'activities', num: true },
         ],
@@ -141,14 +155,20 @@ export async function render({ main, setTitle }) {
   const rosterArea = el('div', {});
   const usageArea = el('div', {});
 
-  async function load() {
-    const [children, apps, summary] = await Promise.all([
-      api('/api/children'),
-      api('/apps'),
+  async function loadUsage(children) {
+    const [summary, counts] = await Promise.all([
       api(`/api/usage/summary?school_id=${encodeURIComponent(user.school_id)}`),
+      appCounts(children),
     ]);
-    replace(rosterArea, rosterForm(children, apps));
-    replace(usageArea, usageTable(children, summary));
+    replace(usageArea, usageTable(children, summary, counts));
+  }
+
+  // After a bulk grant only the usage table is redrawn, so the roster's
+  // checkboxes and its live announcement stay put.
+  async function load() {
+    const [children, apps] = await Promise.all([api('/api/children'), api('/apps')]);
+    replace(rosterArea, rosterForm(children, apps, () => loadUsage(children)));
+    await loadUsage(children);
   }
 
   replace(main,
