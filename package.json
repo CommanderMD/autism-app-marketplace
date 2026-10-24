@@ -2,16 +2,27 @@
   "name": "autism-app-marketplace",
   "version": "1.0.0",
   "description": "A marketplace application for autistic children",
+  "type": "module",
   "main": "src/worker.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1",
     "dev": "wrangler dev",
-    "deploy": "wrangler deploy"
+    "deploy": "wrangler deploy",
+    "migrate:local": "wrangler d1 execute autism-app-marketplace-db --local --file=migrations/001_init.sql && wrangler d1 execute autism-app-marketplace-db --local --file=migrations/002_seed_apps.sql",
+    "migrate:remote": "wrangler d1 execute autism-app-marketplace-db --remote --file=migrations/001_init.sql && wrangler d1 execute autism-app-marketplace-db --remote --file=migrations/002_seed_apps.sql",
+    "test": "vitest run"
   },
-  "keywords": ["autism", "apps", "marketplace", "education"],
+  "keywords": [
+    "autism",
+    "apps",
+    "marketplace",
+    "education"
+  ],
   "author": "MOBY-D 3.0",
   "license": "MIT",
   "devDependencies": {
-    "wrangler": "^3.0.0"
+    "@cloudflare/vitest-pool-workers": "^0.8.71",
+    "miniflare": "^4.20260730.0",
+    "vitest": "^3.2.7",
+    "wrangler": "^4.0.0"
   }
 }
