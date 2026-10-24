@@ -1,15 +1,22 @@
 import { checkHealth } from './db.js';
+import { json } from './http.js';
 import { handleGetApps, handleGetAppById } from './routes/apps.js';
+import { handleRegister, handleLogin, handleLogout, handleMe } from './routes/auth.js';
+import {
+  handleCreateChild, handleListChildren, handleGetChild, handleGrantApp
+} from './routes/children.js';
+import { requireAuth } from './auth/middleware.js';
 
-const JSON_HEADERS = { 'Content-Type': 'application/json' };
+const ALL_ROLES = ['parent', 'school_admin', 'platform_admin'];
 
-function json(body, status = 200) {
-  return new Response(JSON.stringify(body), { status, headers: JSON_HEADERS });
+function methodNotAllowed(allowed) {
+  return json({ error: 'Method Not Allowed' }, 405, { Allow: allowed });
 }
 
 export async function handle(request, env, ctx) {
   const url = new URL(request.url);
   const path = url.pathname.replace(/\/+$/, '') || '/';
+  const method = request.method;
 
   if (path === '/') {
     return json({ name: 'Autism App Marketplace API', status: 'online' });
@@ -20,6 +27,7 @@ export async function handle(request, env, ctx) {
     return json({ ok: dbOk, db: dbOk }, dbOk ? 200 : 503);
   }
 
+  // Public catalogue: no child data.
   if (path === '/apps') {
     return handleGetApps(request, env);
   }
@@ -27,6 +35,49 @@ export async function handle(request, env, ctx) {
   const appMatch = path.match(/^\/apps\/([^/]+)$/);
   if (appMatch) {
     return handleGetAppById(request, env, decodeURIComponent(appMatch[1]));
+  }
+
+  if (path === '/auth/register') {
+    return method === 'POST' ? handleRegister(request, env) : methodNotAllowed('POST');
+  }
+
+  if (path === '/auth/login') {
+    return method === 'POST' ? handleLogin(request, env) : methodNotAllowed('POST');
+  }
+
+  if (path === '/auth/logout') {
+    return method === 'POST' ? handleLogout(request, env) : methodNotAllowed('POST');
+  }
+
+  if (path === '/auth/me') {
+    return method === 'GET' ? handleMe(request, env) : methodNotAllowed('GET');
+  }
+
+  // Everything under /api/ requires a session, including unknown paths, so
+  // probing /api/* without a cookie always gets 401.
+  if (path === '/api' || path.startsWith('/api/')) {
+    const user = await requireAuth(...ALL_ROLES)(request, env);
+    if (user instanceof Response) return user;
+
+    if (path === '/api/children') {
+      if (method === 'GET') return handleListChildren(request, env, user);
+      if (method === 'POST') return handleCreateChild(request, env, user);
+      return methodNotAllowed('GET, POST');
+    }
+
+    const childAppsMatch = path.match(/^\/api\/children\/([^/]+)\/apps$/);
+    if (childAppsMatch) {
+      if (method !== 'POST') return methodNotAllowed('POST');
+      return handleGrantApp(request, env, user, decodeURIComponent(childAppsMatch[1]));
+    }
+
+    const childMatch = path.match(/^\/api\/children\/([^/]+)$/);
+    if (childMatch) {
+      if (method !== 'GET') return methodNotAllowed('GET');
+      return handleGetChild(request, env, user, decodeURIComponent(childMatch[1]));
+    }
+
+    return json({ error: 'Not Found' }, 404);
   }
 
   return json({ error: 'Not Found' }, 404);
