@@ -1,0 +1,307 @@
+/* Act 1 — Sensory Learning. The whole app stylesheet.
+ *
+ * Audience: a 3-12 year old autistic child. Same place, same size, same
+ * order, every task. No timers, no scores, nothing moves unless it must.
+ *
+ * Tokens are the marketplace palette (public/css/app.css), already measured:
+ *   --fg #14181f on --bg #ffffff   17.79:1   body text
+ *   --accent #1d4ed8 on --bg       6.70:1    buttons, focus ring
+ *   --accent-text #fff on --accent 6.70:1    primary button label
+ *   --muted #4a5462 on --bg        7.68:1    hints
+ *   --ok #1b6b35 on --bg           6.52:1    "correct" outline (non-text, needs 3:1)
+ *
+ * Photosensitivity. Every effect the reward player draws is sized by the
+ * plan from engine/reward.js (luminanceDelta per event, WCAG 2.3.1 budget,
+ * SAFE_LUMINANCE_CAP = 0.08 in safe mode). This file never animates
+ * background-color or filter on html, body or main, and never defines a
+ * looping keyframe: the one keyframe below runs exactly once on one choice.
+ *
+ * Every duration is var(--motion) divided by --anim-speed, so 2x is faster
+ * and 0.25x is slower. Nothing hardcodes a time.
+ */
+
+:root {
+  --bg: #ffffff;
+  --fg: #14181f;
+  --muted: #4a5462;
+  --surface: #f6f7f9;
+  --border: #c9cfd8;
+  --border-strong: #6b7584;
+  --accent: #1d4ed8;
+  --accent-text: #ffffff;
+  --ok: #1b6b35;
+  --focus: #1d4ed8;
+  --radius: 14px;
+  --hit: 44px;
+  --choice: 120px;
+  --motion: 180ms;
+  --anim-speed: 1;
+  --dur: calc(var(--motion) / var(--anim-speed));
+  --font: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+}
+
+/* Animations off: the adult's switch, and the OS's reduced-motion setting,
+ * mean the same thing here. */
+:root[data-animations="off"] *,
+:root[data-animations="off"] *::before,
+:root[data-animations="off"] *::after {
+  animation: none !important;
+  transition: none !important;
+}
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation: none !important; transition: none !important; }
+}
+
+/* Safe mode (default ON). No filter anywhere, no viewport-level colour change.
+ * The numeric luminance cap lives in engine/reward.js, not here: this rule
+ * only makes sure CSS cannot add an effect on top of the plan. */
+:root[data-safe="on"] * { filter: none !important; }
+:root[data-safe="on"] .reward-layer { background: transparent !important; }
+
+/* High contrast: pure black on white, a border on everything interactive. */
+:root[data-contrast="high"] {
+  --bg: #ffffff;
+  --fg: #000000;
+  --muted: #000000;
+  --surface: #ffffff;
+  --border: #000000;
+  --border-strong: #000000;
+  --accent: #000000;
+  --accent-text: #ffffff;
+  --ok: #000000;
+  --focus: #000000;
+}
+:root[data-contrast="high"] button,
+:root[data-contrast="high"] select,
+:root[data-contrast="high"] input,
+:root[data-contrast="high"] a { border: 3px solid #000000; }
+
+html { background: var(--bg); color: var(--fg); }
+body {
+  margin: 0;
+  font-family: var(--font);
+  font-size: 22px;
+  line-height: 1.5;
+  min-height: 100vh;
+  -webkit-text-size-adjust: 100%;
+}
+*, *::before, *::after { box-sizing: border-box; }
+button, select, input { font: inherit; color: inherit; }
+button { cursor: pointer; }
+
+:focus-visible { outline: 4px solid var(--focus); outline-offset: 3px; }
+
+#app {
+  max-width: 900px;
+  margin: 0 auto;
+  padding: 16px;
+  display: grid;
+  grid-template-rows: auto auto 1fr auto;
+  gap: 16px;
+  min-height: 100vh;
+}
+
+/* --- top bar: lesson title, progress, settings — same spot always --- */
+.topbar {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  align-items: center;
+  gap: 12px;
+  min-height: 56px;
+}
+.lesson-title { margin: 0; font-size: 1.1rem; font-weight: 700; }
+.progress { display: flex; align-items: center; gap: 10px; color: var(--muted); font-size: 1rem; }
+.progress-bar {
+  width: 160px; height: 12px; border-radius: 6px;
+  background: var(--surface); border: 2px solid var(--border-strong); overflow: hidden;
+}
+.progress-bar > span { display: block; height: 100%; background: var(--accent); transition: width var(--dur) ease; }
+
+.icon-btn {
+  min-width: var(--hit); min-height: var(--hit);
+  display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+  padding: 8px 14px;
+  border: 3px solid var(--border-strong);
+  border-radius: var(--radius);
+  background: var(--surface);
+}
+.icon-btn svg { width: 28px; height: 28px; }
+
+/* --- prompt row: always the same place and size --- */
+.prompt-row {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  align-items: center;
+  gap: 12px;
+  min-height: 96px;
+  padding: 12px 16px;
+  border-radius: var(--radius);
+  background: var(--surface);
+}
+.prompt { margin: 0; font-size: 1.6rem; font-weight: 700; text-align: center; }
+.feedback {
+  margin: 0; min-height: 1.5em; text-align: center;
+  font-size: 1.1rem; color: var(--muted);
+}
+
+/* --- choices: fixed grid, never reflows for the same count --- */
+.choices {
+  display: grid;
+  gap: 16px;
+  align-content: center;
+  justify-content: center;
+}
+.choices[data-count="2"] { grid-template-columns: repeat(2, minmax(var(--choice), 220px)); }
+.choices[data-count="3"] { grid-template-columns: repeat(3, minmax(var(--choice), 200px)); }
+.choices[data-count="4"] { grid-template-columns: repeat(2, minmax(var(--choice), 220px)); }
+
+.choice {
+  min-width: 96px; min-height: 140px;
+  display: grid; grid-template-rows: 1fr auto; align-items: center; justify-items: center;
+  gap: 6px; padding: 12px;
+  border: 4px solid var(--border-strong);
+  border-radius: var(--radius);
+  background: var(--bg);
+  color: var(--fg);
+}
+.choice svg { width: 88px; height: 88px; }
+.choice .label { font-size: 1.1rem; font-weight: 600; }
+.choice[aria-pressed="true"], .choice.is-picked { border-color: var(--accent); }
+.choice.is-correct-reveal { border-color: var(--ok); box-shadow: 0 0 0 4px var(--ok) inset; }
+.choice:disabled { cursor: default; opacity: 0.85; }
+
+/* Wrong answer: one gentle shake on that choice, once. The only keyframe in
+ * the file; it moves position, never colour or luminance. */
+@keyframes choice-shake {
+  0% { transform: translateX(0); }
+  25% { transform: translateX(-6px); }
+  50% { transform: translateX(6px); }
+  75% { transform: translateX(-3px); }
+  100% { transform: translateX(0); }
+}
+.choice.shake { animation: choice-shake calc(var(--dur) * 2) ease-in-out 1; }
+
+/* --- drag mode --- */
+.drag-area { display: grid; gap: 16px; justify-items: center; align-content: center; }
+.tray { display: flex; flex-wrap: wrap; gap: 12px; justify-content: center; min-height: 120px; }
+.drag-item { touch-action: none; min-height: 110px; }
+.drag-item.is-dragging { opacity: 0.6; }
+.drop-zone {
+  width: min(100%, 420px); min-height: 180px;
+  display: grid; grid-template-columns: auto 1fr; align-items: center; gap: 12px;
+  padding: 12px 16px;
+  border: 4px dashed var(--border-strong);
+  border-radius: var(--radius);
+  background: var(--surface);
+}
+.drop-zone.is-over { border-style: solid; border-color: var(--accent); }
+.drop-zone > svg { width: 110px; height: 110px; }
+.drop-zone .placed { display: flex; flex-wrap: wrap; gap: 8px; min-height: 60px; }
+.drop-zone .placed svg { width: 56px; height: 56px; }
+.drop-zone .zone-label { grid-column: 1 / -1; font-size: 1rem; color: var(--muted); }
+
+/* --- sequence mode --- */
+.sequence-area { display: grid; gap: 16px; justify-items: center; align-content: center; }
+.slots { display: flex; gap: 12px; }
+.slot {
+  width: 110px; height: 110px;
+  display: grid; place-items: center;
+  border: 4px dashed var(--border-strong);
+  border-radius: var(--radius);
+  background: var(--surface);
+  font-size: 1rem; color: var(--muted);
+}
+.slot.is-filled { border-style: solid; }
+.slot.is-wrong { border-color: var(--accent); border-style: solid; }
+.slot svg { width: 80px; height: 80px; }
+
+/* --- bottom: one affordance, same place --- */
+.bottom {
+  display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; gap: 12px;
+  min-height: 80px;
+}
+.bottom .left { justify-self: start; }
+.bottom .right { justify-self: end; }
+.next {
+  grid-column: 2;
+  min-width: 180px; min-height: 64px;
+  padding: 12px 28px;
+  font-size: 1.3rem; font-weight: 700;
+  border: 4px solid var(--accent);
+  border-radius: var(--radius);
+  background: var(--accent); color: var(--accent-text);
+}
+.next:disabled {
+  background: var(--surface); color: var(--muted);
+  border-color: var(--border); cursor: default;
+}
+.text-btn {
+  min-height: var(--hit); padding: 8px 16px;
+  border: 3px solid var(--border-strong); border-radius: var(--radius);
+  background: var(--surface);
+}
+
+/* --- panels: lesson complete, grown-up --- */
+.panel {
+  display: grid; gap: 18px; justify-items: center; align-content: center; text-align: center;
+  padding: 24px; border-radius: var(--radius); background: var(--surface);
+  min-height: 300px;
+}
+.panel h1, .panel h2 { margin: 0; font-size: 1.8rem; }
+.panel p { margin: 0; }
+.panel a, .panel .next { display: inline-grid; place-items: center; text-decoration: none; }
+
+/* --- reward layer: inside #app, never the viewport, never blocks input --- */
+.reward-layer {
+  position: fixed; inset: 0;
+  pointer-events: none;
+  overflow: hidden;
+  background: transparent;
+}
+.reward-piece {
+  position: absolute;
+  width: 14px; height: 14px; border-radius: 4px;
+  opacity: 0;
+}
+.reward-glow {
+  position: absolute; left: 50%; top: 50%;
+  width: 320px; height: 320px; margin: -160px 0 0 -160px;
+  border-radius: 50%;
+  background: radial-gradient(circle, var(--accent) 0%, transparent 70%);
+  opacity: 0;
+}
+
+/* --- settings panel (for the adult) --- */
+.settings-panel {
+  position: fixed; top: 0; right: 0; bottom: 0;
+  width: min(100%, 420px);
+  overflow: auto;
+  padding: 20px;
+  background: var(--bg);
+  border-left: 4px solid var(--border-strong);
+  display: grid; gap: 18px; align-content: start;
+  font-size: 18px;
+}
+.settings-panel[hidden] { display: none; }
+.settings-panel h2 { margin: 0; font-size: 1.3rem; }
+.settings-panel .row { display: grid; gap: 6px; }
+.settings-panel label { font-weight: 600; }
+.settings-panel .value { color: var(--muted); font-size: 1rem; }
+.settings-panel input[type="range"] { width: 100%; min-height: var(--hit); }
+.settings-panel select, .settings-panel input[type="checkbox"], .settings-panel input[type="radio"] { min-height: var(--hit); }
+.settings-panel input[type="checkbox"], .settings-panel input[type="radio"] { width: 28px; height: 28px; }
+.settings-panel .check { display: flex; align-items: center; gap: 12px; min-height: var(--hit); }
+.settings-panel .note { font-size: 1rem; color: var(--muted); margin: 0; }
+.settings-panel .save-note { font-size: 1rem; min-height: 1.5em; margin: 0; }
+
+.visually-hidden {
+  position: absolute !important; width: 1px; height: 1px; overflow: hidden;
+  clip: rect(0 0 0 0); white-space: nowrap;
+}
+
+@media (max-width: 520px) {
+  body { font-size: 20px; }
+  .choices[data-count="3"] { grid-template-columns: repeat(3, minmax(96px, 1fr)); }
+  .choice svg { width: 72px; height: 72px; }
+  .progress-bar { width: 100px; }
+}

@@ -341,7 +341,7 @@ describe("launch gate GET /apps/:appId/play", () => {
     expect(allowed.status).toBe(200);
     expect(contentType(allowed)).toContain("text/html");
     expect(allowed.headers.get("Cache-Control")).toBe("no-store");
-    expect(await allowed.text()).toContain("<h1>Act 1</h1>");
+    expect(await allowed.text()).toContain(`<meta name="child-id" content="${childA.id}"`);
   });
 
   it("a revoked grant gets the same denial page as an expired one", async () => {
@@ -367,7 +367,7 @@ describe("launch gate GET /apps/:appId/play", () => {
     expect(other.status).toBe(403);
     const otherText = await other.text();
     expect(otherText).not.toContain(childB.name);
-    expect(otherText).not.toContain("<h1>Act 1</h1>");
+    expect(otherText).not.toContain('<meta name="child-id"');
 
     expect((await call("GET", playPath("no-such-child"), { cookie: a.cookie })).status).toBe(404);
 

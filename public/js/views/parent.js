@@ -106,6 +106,15 @@ export async function render({ main, setTitle }) {
     if (granted instanceof Error) return notice(`Apps could not be loaded: ${granted.message}`, { error: true });
     if (granted.length === 0) return el('p', {}, 'No apps granted yet.');
 
+    // Launch goes through the server-side gate, never to the app folder directly.
+    function playLink(app) {
+      return el('a', {
+        class: 'btn',
+        href: `/apps/${encodeURIComponent(app.app_id)}/play?child_id=${encodeURIComponent(child.id)}`,
+        'aria-label': `Play ${app.name} as ${child.name}`,
+      }, 'Play');
+    }
+
     function removeButton(app) {
       const button = el('button', { type: 'button', class: 'danger', 'aria-label': `Remove ${app.name} from ${child.name}` }, 'Remove');
       button.addEventListener('click', () => {
@@ -127,6 +136,7 @@ export async function render({ main, setTitle }) {
         { label: 'App', key: 'name' },
         { label: 'Category', key: 'category' },
         { label: 'Granted', render: (a) => grantedLabel(a.granted_at) },
+        { label: 'Play', render: playLink },
         { label: 'Action', render: removeButton },
       ],
       rows: granted,
