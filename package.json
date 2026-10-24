@@ -1,0 +1,17 @@
+{
+  "name": "autism-app-marketplace",
+  "version": "1.0.0",
+  "description": "A marketplace application for autistic children",
+  "main": "src/worker.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy"
+  },
+  "keywords": ["autism", "apps", "marketplace", "education"],
+  "author": "MOBY-D 3.0",
+  "license": "MIT",
+  "devDependencies": {
+    "wrangler": "^3.0.0"
+  }
+}
