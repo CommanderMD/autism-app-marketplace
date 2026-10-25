@@ -29,6 +29,10 @@ const ALL_ROLES = ['parent', 'school_admin', 'platform_admin'];
 // /apps/<dir>/dev).
 const APP_ASSET = /^\/apps\/(act1|money-bingo|word-builder|emotion-match|pattern-puzzles)\/(?:(?:engine|lessons|css|js)\/[a-z0-9][a-z0-9-]*\.(?:js|css)|dev(?:\.html)?)$/;
 
+// First line of every public/apps/<dir>/dev.html. How the router tells a real
+// harness from the SPA fallback, which is also HTML with a 200.
+const HARNESS_BANNER = '<!-- DEBUG HARNESS — not part of the product -->';
+
 function methodNotAllowed(allowed) {
   return json({ error: 'Method Not Allowed' }, 405, { Allow: allowed });
 }
@@ -109,10 +113,14 @@ async function route(request, env) {
   // encoded path cannot reach them either. Only the five listed app directories.
   if (APP_ASSET.test(path)) {
     const asset = await serveAsset(env, request);
-    // not_found_handling is single-page-application, so a missing module comes
-    // back as the storefront's index.html with a 200. Keep it a JSON 404.
-    if (/\.(?:js|css)$/.test(path) && (asset.headers.get('Content-Type') || '').includes('text/html')) {
-      return json({ error: 'Not Found' }, 404);
+    // not_found_handling is single-page-application, so a missing file comes
+    // back as the storefront's index.html with a 200. Keep it a JSON 404. No
+    // admitted path is legitimately HTML except a real dev.html, and every real
+    // harness opens with HARNESS_BANNER; the SPA fallback never does.
+    if ((asset.headers.get('Content-Type') || '').includes('text/html')) {
+      const isHarness = /\/dev(?:\.html)?$/.test(path)
+        && (await asset.clone().text()).startsWith(HARNESS_BANNER);
+      if (!isHarness) return json({ error: 'Not Found' }, 404);
     }
     return asset;
   }
