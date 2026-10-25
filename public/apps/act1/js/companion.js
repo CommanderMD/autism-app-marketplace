@@ -114,6 +114,8 @@ export function earnedFriends(completedCount) {
 }
 
 // The panel shown on "You did it!": the guide cheering plus any earned friends.
+// App-agnostic: it takes a plain count and knows no lesson ids, so other apps
+// in the family reuse it (Money Bingo passes 0: the guide alone cheers).
 export function celebrationRow(completedCount) {
   const row = document.createElement('div');
   row.className = 'friends-row';
