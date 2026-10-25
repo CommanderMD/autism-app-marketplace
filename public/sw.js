@@ -16,8 +16,8 @@
  * What is stored: files from this origin, plus for the runtime group the
  * gate's HTML (which carries only the child's opaque id in a meta tag) and
  * the settings/progress JSON (ids, booleans, numbers). No name is in any of
- * these, and sign-out clears every cache (public/js/session.js posts
- * 'clear'). Rule A4.
+ * these, and sign-out deletes every cache from the page
+ * (public/js/session.js). Rule A4.
  *
  * VERSION changes on every deploy that touches a precached file; the old cache
  * is deleted on activate.
@@ -71,19 +71,19 @@ self.addEventListener('activate', (event) => {
   );
 });
 
-// Messages from the shell:
+// Messages from the shell. One kind only:
 //   { type: 'warm', urls: [...] }  the first visit happens before this worker
 //                                  controls the page, so the shell asks for the
 //                                  gate page and its two boot GETs to be fetched
 //                                  (with the session cookie) into the runtime
 //                                  cache now, not on the next visit. Only URLs
 //                                  the runtime group would intercept are accepted.
-//   { type: 'clear' }              sign-out: empty every cache this worker owns.
+// Sign-out does not message the worker: public/js/session.js deletes every
+// cache and the offline store directly from the page (the Cache API is the
+// same storage either way), so there is one clearing mechanism, not two.
 self.addEventListener('message', (event) => {
   const data = event.data || {};
-  if (data.type === 'clear') {
-    event.waitUntil(caches.keys().then((keys) => Promise.all(keys.map((k) => caches.delete(k)))));
-  } else if (data.type === 'warm' && Array.isArray(data.urls)) {
+  if (data.type === 'warm' && Array.isArray(data.urls)) {
     event.waitUntil(warm(data.urls));
   }
 });

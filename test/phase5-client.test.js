@@ -42,13 +42,17 @@ describe("service worker", () => {
     for (const p of listed) expect((await call(p)).status, p).toBe(200);
   });
 
-  it("2. the worker intercepts GET only, never caches a non-200, evicts on 401/403, and clears on message", async () => {
+  it("2. the worker intercepts GET only, never caches a non-200, evicts on 401/403, and accepts only the 'warm' message", async () => {
     const sw = await text("/sw.js");
     expect(sw).toContain("if (req.method !== 'GET') return;");
     expect(sw).toContain("url.origin !== self.location.origin");
     expect(sw).toContain("if (res.ok)");
     expect(sw).toMatch(/res\.status === 401 \|\| res\.status === 403/);
-    expect(sw).toContain("event.data.type === 'clear'");
+    // One message kind. Sign-out clears caches from the page (session.js,
+    // asserted in test 3), so there is no 'clear' branch to go stale here.
+    expect(sw).toContain("data.type === 'warm' && Array.isArray(data.urls)");
+    expect(sw).not.toContain("'clear'");
+    expect(sw).toMatch(/credentials: 'include'/); // warm fetches carry the session cookie
     expect(sw).not.toMatch(/innerHTML|eval\(|importScripts/);
     // Only the gate page and the two boot GETs are network-first; nothing else under /api.
     expect(sw).toContain("/^\\/api\\/children\\/[^/]+\\/(settings|progress)$/");

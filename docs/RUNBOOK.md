@@ -17,6 +17,7 @@ npx wrangler@4 d1 execute autism-app-marketplace-db --remote --command \
 
 ```sh
 git checkout main && git pull
+env -u NODE_ENV npm install --include=dev # NODE_ENV=production in the shell would skip vitest
 npm test                                  # must be green
 npm run migrate:remote                    # applies only unapplied migrations
 npx wrangler@4 deploy                     # note the Version ID it prints

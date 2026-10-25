@@ -42,6 +42,10 @@ Create a platform admin for the local database with
 npm test                       # vitest in workerd: 218 tests across 10 files
 ```
 
+If `npm test` says `vitest: command not found`, the shell has
+`NODE_ENV=production` exported and `npm install` skipped devDependencies.
+Run `env -u NODE_ENV npm install --include=dev` once, then `npm test`.
+
 Tests run the real Worker against an in-memory D1 with every migration
 applied (`test/apply-migrations.js`). Fixtures are obviously fake
 (`example.test` emails, "Fake Child …" names) — Rule A4.
