@@ -14,7 +14,7 @@ import { el, replace } from '/js/ui.js';
 import { CANONICAL_ORDER } from '../engine/lesson.js';
 import { initialState, reduce, currentLesson, currentStep, unlockedIds } from '../engine/state.js';
 import { createRewardPlayer } from './reward-player.js';
-import { createSettingsPanel, resolveInitial, readLocal, applyToDocument, APP_ID, readGuidePref, writeGuidePref } from './settings-panel.js';
+import { createSettingsPanel, resolveInitial, readLocal, applyToDocument, getAppId, readGuidePref, writeGuidePref } from './settings-panel.js';
 import { svgNode } from './svg-dom.js';
 import { createCompanion, preloadGuide, celebrationRow, arrivalLine, GUIDE_NAME } from './companion.js';
 import { initI18n, t, tr, speechLang } from '/js/i18n.js';
@@ -22,6 +22,8 @@ import { enqueue, flush as flushOffline, queueLength } from './offline-queue.js'
 
 const LESSON_ID_RE = /^[a-z0-9-]+$/;
 const MAX_SECONDS = 600;
+// From the gate's <meta name="app-id">; see getAppId in settings-panel.js.
+const APP_ID = getAppId();
 
 const main = document.getElementById('app');
 const prefersReducedMotion = typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches;

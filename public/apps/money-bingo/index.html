@@ -1,0 +1,59 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="robots" content="noindex">
+  <!-- Filled by the launch gate (src/routes/play.js). Empty here on purpose. -->
+  <meta name="child-id" content="">
+  <meta name="app-id" content="">
+  <title>Money Bingo</title>
+  <link rel="stylesheet" href="/apps/money-bingo/css/app.css">
+</head>
+<body>
+  <!-- The board is real markup: 3 rows x 5 cells, one per money item. js/main.js
+       fills each cell's picture and name from the seeded board and wires taps.
+       Cells stay disabled until the child taps Start, so nothing plays on load. -->
+  <main id="app" data-app-id="money-bingo">
+    <header class="topbar">
+      <h1 id="title">Money Bingo</h1>
+    </header>
+
+    <section class="caller" id="caller" aria-labelledby="caller-heading">
+      <h2 id="caller-heading" class="visually-hidden">Caller</h2>
+      <div class="call-card" id="call-card"></div>
+      <p class="feedback" id="feedback"></p>
+    </section>
+
+    <div class="board" id="board" role="grid" aria-labelledby="board-label" aria-rowcount="3" aria-colcount="5">
+      <span id="board-label" class="visually-hidden">Bingo board</span>
+      <div role="row" aria-rowindex="1">
+        <div role="gridcell" aria-colindex="1"><button type="button" class="cell" data-cell="0" aria-pressed="false" disabled></button></div>
+        <div role="gridcell" aria-colindex="2"><button type="button" class="cell" data-cell="1" aria-pressed="false" disabled></button></div>
+        <div role="gridcell" aria-colindex="3"><button type="button" class="cell" data-cell="2" aria-pressed="false" disabled></button></div>
+        <div role="gridcell" aria-colindex="4"><button type="button" class="cell" data-cell="3" aria-pressed="false" disabled></button></div>
+        <div role="gridcell" aria-colindex="5"><button type="button" class="cell" data-cell="4" aria-pressed="false" disabled></button></div>
+      </div>
+      <div role="row" aria-rowindex="2">
+        <div role="gridcell" aria-colindex="1"><button type="button" class="cell" data-cell="5" aria-pressed="false" disabled></button></div>
+        <div role="gridcell" aria-colindex="2"><button type="button" class="cell" data-cell="6" aria-pressed="false" disabled></button></div>
+        <div role="gridcell" aria-colindex="3"><button type="button" class="cell" data-cell="7" aria-pressed="false" disabled></button></div>
+        <div role="gridcell" aria-colindex="4"><button type="button" class="cell" data-cell="8" aria-pressed="false" disabled></button></div>
+        <div role="gridcell" aria-colindex="5"><button type="button" class="cell" data-cell="9" aria-pressed="false" disabled></button></div>
+      </div>
+      <div role="row" aria-rowindex="3">
+        <div role="gridcell" aria-colindex="1"><button type="button" class="cell" data-cell="10" aria-pressed="false" disabled></button></div>
+        <div role="gridcell" aria-colindex="2"><button type="button" class="cell" data-cell="11" aria-pressed="false" disabled></button></div>
+        <div role="gridcell" aria-colindex="3"><button type="button" class="cell" data-cell="12" aria-pressed="false" disabled></button></div>
+        <div role="gridcell" aria-colindex="4"><button type="button" class="cell" data-cell="13" aria-pressed="false" disabled></button></div>
+        <div role="gridcell" aria-colindex="5"><button type="button" class="cell" data-cell="14" aria-pressed="false" disabled></button></div>
+      </div>
+    </div>
+
+    <footer class="actions" id="actions"></footer>
+
+    <p class="visually-hidden" id="announcer" role="status" aria-live="polite"></p>
+  </main>
+  <script type="module" src="/apps/money-bingo/js/main.js"></script>
+</body>
+</html>

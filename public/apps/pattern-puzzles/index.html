@@ -1,0 +1,29 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="robots" content="noindex">
+  <!-- Filled by the launch gate (src/routes/play.js). Empty here on purpose. -->
+  <meta name="child-id" content="">
+  <meta name="app-id" content="">
+  <title>Pattern Puzzles</title>
+  <link rel="stylesheet" href="/apps/pattern-puzzles/css/app.css">
+</head>
+<body>
+  <!-- js/main.js draws one puzzle at a time into #screen, then the
+       celebration after 6. Nothing is spoken until the child taps, and
+       nothing moves on until the child chooses to. -->
+  <main id="app" data-app-id="pattern-puzzles">
+    <header class="topbar">
+      <h1 id="title">Pattern Puzzles</h1>
+      <button type="button" class="text-btn" id="grownups" hidden>Grown-ups</button>
+    </header>
+
+    <div id="screen"></div>
+
+    <p class="visually-hidden" id="announcer" role="status" aria-live="polite"></p>
+  </main>
+  <script type="module" src="/apps/pattern-puzzles/js/main.js"></script>
+</body>
+</html>

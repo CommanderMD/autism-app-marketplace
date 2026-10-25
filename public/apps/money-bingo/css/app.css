@@ -1,0 +1,180 @@
+/* Money Bingo styles.
+ *
+ * Same tokens and settings hooks as public/apps/act1/css/app.css, so
+ * applyToDocument() from act1/js/settings-panel.js drives both apps the same
+ * way: data-contrast, data-animations, data-safe, --anim-speed.
+ *
+ * Contrast (figures from the Act 1 palette measurements in act1/engine/svg.js):
+ *   text #14181f on #ffffff - the Act 1 text pair
+ *   accent #1d4ed8 on #ffffff 6.70:1 (hint outline, primary button)
+ *   line  #15803d on #ffffff 5.02:1 (winning-line border)
+ * Marked state is never colour alone: a marked cell gets a solid ink border
+ * AND an ink check badge in the corner. The hint is a dashed outline (shape),
+ * the winning line a double border (shape).
+ *
+ * Nothing here loops and nothing animates position or size. With animations
+ * off or prefers-reduced-motion, every transition is removed: state changes
+ * only. The reward player plans no visuals at all in either case.
+ */
+
+:root {
+  --bg: #ffffff;
+  --fg: #14181f;
+  --muted: #4a5462;
+  --surface: #f6f7f9;
+  --border: #c9cfd8;
+  --accent: #1d4ed8;
+  --accent-text: #ffffff;
+  --line: #15803d;
+  --marked-bg: #eef2ff;
+  --focus: #1d4ed8;
+  --radius: 14px;
+  --hit: 44px;
+  --motion: 180ms;
+  --anim-speed: 1;
+  --dur: calc(var(--motion) / var(--anim-speed));
+  --font: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+}
+
+:root[data-animations="off"] *,
+:root[data-animations="off"] *::before,
+:root[data-animations="off"] *::after {
+  animation: none !important;
+  transition: none !important;
+}
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation: none !important; transition: none !important; transform: none !important; }
+}
+
+:root[data-safe="on"] * { filter: none !important; }
+:root[data-safe="on"] .reward-layer { background: transparent !important; }
+
+:root[data-contrast="high"] {
+  --fg: #000000;
+  --muted: #000000;
+  --surface: #ffffff;
+  --border: #000000;
+  --accent: #000000;
+  --line: #000000;
+  --marked-bg: #ffffff;
+  --focus: #000000;
+}
+:root[data-contrast="high"] button,
+:root[data-contrast="high"] a { border: 3px solid #000000; }
+
+* { box-sizing: border-box; }
+html { background: var(--bg); color: var(--fg); }
+body {
+  margin: 0;
+  font-family: var(--font);
+  font-size: 1.25rem;
+  line-height: 1.5;
+}
+#app {
+  display: grid; gap: 16px; align-content: start; justify-items: center;
+  min-height: 100vh; padding: 16px; max-width: 900px; margin: 0 auto;
+}
+h1 { margin: 0; font-size: 1.8rem; text-align: center; }
+a, button { min-height: var(--hit); min-width: var(--hit); font: inherit; color: inherit; }
+:focus-visible { outline: 4px solid var(--focus); outline-offset: 3px; }
+
+/* --- caller: one card, always in the same place --- */
+.caller { display: grid; gap: 8px; justify-items: center; width: 100%; }
+.call-card {
+  display: grid; grid-template-columns: auto 1fr auto; align-items: center; gap: 12px;
+  min-height: 104px; width: min(100%, 520px);
+  padding: 10px 14px;
+  background: var(--surface); border: 3px solid var(--fg); border-radius: var(--radius);
+}
+.call-card:empty { display: none; }
+.call-picture svg { width: 80px; height: 80px; display: block; color: var(--fg); }
+.call-label { margin: 0; font-size: 1.6rem; font-weight: 700; }
+.call-prefix { display: block; font-size: 1rem; font-weight: 400; color: var(--muted); }
+.icon-btn {
+  display: inline-grid; place-items: center;
+  width: 56px; height: 56px; padding: 0;
+  background: var(--bg); border: 2px solid var(--border); border-radius: 50%;
+  cursor: pointer;
+}
+.icon-btn svg { width: 28px; height: 28px; }
+.feedback { margin: 0; min-height: 1.5em; text-align: center; font-size: 1.15rem; }
+
+/* --- board: 3 rows x 5 cells, every cell well over 44x44 --- */
+.board { display: grid; gap: 8px; width: min(100%, 720px); }
+.board [role="row"] { display: grid; grid-template-columns: repeat(5, minmax(var(--hit), 1fr)); gap: 8px; }
+.board [role="gridcell"] { display: grid; }
+.cell {
+  position: relative;
+  display: grid; grid-template-rows: 1fr auto; justify-items: center; align-items: center; gap: 2px;
+  min-width: var(--hit); min-height: 96px; padding: 6px 4px;
+  background: var(--bg); color: var(--fg);
+  border: 2px solid var(--border); border-radius: var(--radius);
+  cursor: pointer;
+  transition: border-color var(--dur), background-color var(--dur);
+}
+.cell svg { width: 100%; max-width: 72px; height: auto; aspect-ratio: 1; color: var(--fg); }
+.cell-label { font-size: 0.85rem; line-height: 1.2; text-align: center; }
+.cell:disabled { cursor: default; }
+.cell[aria-disabled="true"] { cursor: default; }
+
+/* Marked: solid ink border + tinted surface + check badge (shape, not colour). */
+.cell.is-marked { border: 4px solid var(--fg); background: var(--marked-bg); }
+.cell .mark {
+  position: absolute; top: 4px; right: 4px;
+  display: grid; place-items: center;
+  width: 28px; height: 28px; border-radius: 50%;
+  background: var(--fg); color: var(--bg);
+}
+.cell .mark svg { width: 20px; height: 20px; max-width: none; }
+
+/* Hint after a wrong tap: a dashed outline on the right cell. No motion. */
+.cell.is-hint { outline: 4px dashed var(--accent); outline-offset: 2px; }
+
+/* The completed line: a double border on its three cells. */
+.cell.is-line { border: 6px double var(--line); }
+
+/* --- one action at the bottom --- */
+.actions { display: grid; justify-items: center; gap: 12px; min-height: var(--hit); width: 100%; }
+.action {
+  display: inline-grid; place-items: center;
+  min-width: 200px; min-height: 56px; padding: 10px 28px;
+  background: var(--accent); color: var(--accent-text);
+  border: 3px solid var(--accent); border-radius: 999px;
+  font-size: 1.3rem; font-weight: 700; text-decoration: none; cursor: pointer;
+}
+.action.bingo { min-width: 240px; min-height: 72px; font-size: 1.8rem; }
+.action.secondary { background: var(--bg); color: var(--accent); }
+.celebration { display: grid; gap: 10px; justify-items: center; text-align: center; }
+.celebration h2 { margin: 0; font-size: 1.8rem; }
+.celebration p { margin: 0; }
+.celebration .choices { display: flex; flex-wrap: wrap; gap: 12px; justify-content: center; }
+.friends-row { display: flex; gap: 12px; align-items: flex-end; justify-content: center; }
+.friend { height: 120px; width: auto; }
+
+.panel { display: grid; gap: 16px; justify-items: center; text-align: center; padding: 24px; }
+.panel p { margin: 0; }
+
+/* --- reward layer (the shared safe-mode reward player draws into it) --- */
+.reward-layer { position: fixed; inset: 0; pointer-events: none; overflow: hidden; background: transparent; }
+.reward-piece { position: absolute; width: 14px; height: 14px; border-radius: 4px; opacity: 0; }
+.reward-glow {
+  position: absolute; left: 50%; top: 50%;
+  width: 320px; height: 320px; margin: -160px 0 0 -160px;
+  border-radius: 50%;
+  background: radial-gradient(circle, var(--accent) 0%, transparent 70%);
+  opacity: 0;
+}
+
+.visually-hidden {
+  position: absolute !important; width: 1px; height: 1px; overflow: hidden;
+  clip: rect(0 0 0 0); white-space: nowrap;
+}
+
+@media (max-width: 520px) {
+  #app { padding: 10px; }
+  .board, .board [role="row"] { gap: 4px; }
+  .cell { min-height: 72px; padding: 4px 2px; }
+  .cell-label { font-size: 0.7rem; }
+  .cell .mark { width: 22px; height: 22px; top: 2px; right: 2px; }
+  .cell .mark svg { width: 16px; height: 16px; }
+}
