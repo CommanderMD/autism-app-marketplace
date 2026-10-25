@@ -11,7 +11,19 @@
   <link rel="stylesheet" href="/apps/pattern-puzzles/css/app.css">
 </head>
 <body>
-  <main id="app" aria-live="polite"></main>
+  <!-- js/main.js draws one puzzle at a time into #screen, then the
+       celebration after 6. Nothing is spoken until the child taps, and
+       nothing moves on until the child chooses to. -->
+  <main id="app" data-app-id="pattern-puzzles">
+    <header class="topbar">
+      <h1 id="title">Pattern Puzzles</h1>
+      <button type="button" class="text-btn" id="grownups" hidden>Grown-ups</button>
+    </header>
+
+    <div id="screen"></div>
+
+    <p class="visually-hidden" id="announcer" role="status" aria-live="polite"></p>
+  </main>
   <script type="module" src="/apps/pattern-puzzles/js/main.js"></script>
 </body>
 </html>
