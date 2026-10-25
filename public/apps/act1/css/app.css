@@ -77,8 +77,24 @@
 :root[data-contrast="high"] a { border: 3px solid #000000; }
 
 html { background: var(--bg); color: var(--fg); }
+/* Scenes: a static, muted picture behind the play area. Panels and cards stay
+ * on solid surfaces above it, so text contrast is unchanged. A white veil
+ * keeps every scene faint; safe mode makes the veil heavier. Nothing here
+ * moves, so animations-off needs no rule. */
+:root[data-scene="solar"] body { background-image: url('/img/act1/scene-solar.svg'); }
+:root[data-scene="jungle"] body { background-image: url('/img/act1/scene-jungle.svg'); }
+:root[data-scene="speedway"] body { background-image: url('/img/act1/scene-speedway.svg'); }
+:root[data-scene]:not([data-scene="plain"]) body { background-size: cover; background-position: center; background-attachment: fixed; }
+:root[data-scene]:not([data-scene="plain"]) body::before {
+  content: ""; position: fixed; inset: 0; pointer-events: none; z-index: -1;
+  background: rgba(255, 255, 255, 0.45);
+}
+:root[data-safe="on"][data-scene]:not([data-scene="plain"]) body::before { background: rgba(255, 255, 255, 0.65); }
+:root[data-contrast="high"] body { background-image: none !important; }
+:root[data-scene]:not([data-scene="plain"]) .choice { background: #ffffff; }
 body {
   margin: 0;
+  position: relative; z-index: 0;
   font-family: var(--font);
   font-size: 22px;
   line-height: 1.5;

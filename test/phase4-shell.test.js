@@ -175,6 +175,21 @@ describe("Act 1 shell assets", () => {
     expect(css).toMatch(/@keyframes companion-breathe[^}]*\{[^}]*transform/);
   });
 
+  it("11. scene backgrounds are served, static, muted, and never override the cards", async () => {
+    for (const n of ["solar", "jungle", "speedway"]) {
+      const res = await call("GET", `/img/act1/scene-${n}.svg`);
+      expect(res.status, n).toBe(200);
+      expect(contentType(res), n).toContain("image/svg");
+      const svg = await res.text();
+      expect(svg).not.toMatch(/<animate|<script|<set\b|begin=/);
+      expect(svg.length).toBeLessThan(6000);
+    }
+    const css = await text("/apps/act1/css/app.css");
+    for (const n of ["solar", "jungle", "speedway"]) expect(css).toContain(`:root[data-scene="${n}"] body`);
+    expect(css).toContain(':root[data-safe="on"][data-scene]');
+    expect(css).toContain(':root[data-contrast="high"] body { background-image: none !important; }');
+  });
+
   it("9. the parent dashboard and app detail launch through the gate URL, never the app folder", async () => {
     const parent = await text("/js/views/parent.js");
     expect(parent).toContain("/play?child_id=");

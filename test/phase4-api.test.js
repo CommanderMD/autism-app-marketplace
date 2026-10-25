@@ -91,6 +91,7 @@ describe("settings", () => {
       child_id: childA.id, app_id: ACT1,
       volume: 60, flash_intensity: 50, animation_speed: 1,
       contrast: "normal", animations: true, safe_mode: true,
+      scene: "plain", coloured_shapes: false,
       is_default: true,
     });
   });
@@ -110,8 +111,21 @@ describe("settings", () => {
       child_id: childA.id, app_id: ACT1,
       volume: 20, flash_intensity: 50, animation_speed: 1,
       contrast: "high", animations: true, safe_mode: true,
+      scene: "plain", coloured_shapes: false,
       is_default: false,
     });
+  });
+
+  it("2b. scene and coloured_shapes round-trip, and a bad scene is rejected", async () => {
+    const { a, childA } = await twoFamilies("scene");
+    const put = (body) => call("PUT", `/api/children/${childA.id}/settings`, { cookie: a.cookie, body: { app_id: ACT1, ...body } });
+    expect((await put({ scene: "disco" })).status).toBe(400);
+    expect((await put({ coloured_shapes: "yes" })).status).toBe(400);
+    const ok = await put({ scene: "jungle", coloured_shapes: true });
+    expect(ok.status).toBe(200);
+    expect(await ok.json()).toMatchObject({ scene: "jungle", coloured_shapes: true, safe_mode: true });
+    const back = await put({ scene: "plain" });
+    expect(await back.json()).toMatchObject({ scene: "plain", coloured_shapes: true });
   });
 
   it("3. safe_mode only turns off on an explicit false", async () => {

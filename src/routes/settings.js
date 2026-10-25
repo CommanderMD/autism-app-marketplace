@@ -12,7 +12,10 @@ const DEFAULTS = {
   contrast: 'normal',
   animations: 1,
   safe_mode: 1,
+  scene: 'plain',
+  coloured_shapes: 0,
 };
+export const SCENES = ['plain', 'solar', 'jungle', 'speedway'];
 
 const isIntIn = (min, max) => (v) => Number.isInteger(v) && v >= min && v <= max;
 const isBool = (v) => typeof v === 'boolean';
@@ -33,6 +36,8 @@ const FIELDS = {
   // Photosensitivity safe mode is ON unless the client sends an explicit false.
   // Only `false` itself maps to 0; an omitted key is never written (see PUT).
   safe_mode: { valid: isBool, error: 'safe_mode must be a boolean', toDb: (v) => (v === false ? 0 : 1) },
+  scene: { valid: (v) => SCENES.includes(v), error: `scene must be one of ${SCENES.join(', ')}` },
+  coloured_shapes: { valid: isBool, error: 'coloured_shapes must be a boolean', toDb: boolToDb },
 };
 const COLUMNS = Object.keys(FIELDS);
 
@@ -46,6 +51,8 @@ function present(childId, appId, row, isDefault) {
     contrast: row.contrast,
     animations: row.animations === 1,
     safe_mode: row.safe_mode === 1,
+    scene: row.scene,
+    coloured_shapes: row.coloured_shapes === 1,
     is_default: isDefault,
   };
 }

@@ -39,7 +39,15 @@ export const DEFAULT_SETTINGS = Object.freeze({
   contrast: 'normal',
   animations: true,
   safe_mode: true, // photosensitivity safe mode: ON unless an adult turns it off
+  scene: 'plain',       // static picture behind the play area; 'plain' = none
+  coloured_shapes: false, // lesson 01 combined cue ("Touch the red square")
 });
+export const SCENES = Object.freeze([
+  { id: 'plain', label: 'Plain (no picture)' },
+  { id: 'solar', label: 'Solar system' },
+  { id: 'jungle', label: 'Jungle and zoo' },
+  { id: 'speedway', label: 'Speedway' },
+]);
 
 const SPEEDS = [0.25, 0.5, 1, 1.5, 2];
 
@@ -71,6 +79,8 @@ function pick(s) {
     contrast: s.contrast,
     animations: s.animations,
     safe_mode: s.safe_mode,
+    scene: s.scene,
+    coloured_shapes: s.coloured_shapes,
   };
 }
 
@@ -95,6 +105,8 @@ export function applyToDocument(s) {
   root.dataset.safe = s.safe_mode === false ? 'off' : 'on';
   const speed = SPEEDS.includes(Number(s.animation_speed)) ? Number(s.animation_speed) : 1;
   root.style.setProperty('--anim-speed', String(speed));
+  const scene = SCENES.some((x) => x.id === s.scene) ? s.scene : 'plain';
+  root.dataset.scene = scene;
 }
 
 export function createSettingsPanel({ childId, initial, onChange, onTestSound, guideShown = true, onToggleGuide }) {
@@ -174,6 +186,14 @@ export function createSettingsPanel({ childId, initial, onChange, onTestSound, g
   guideBox.checked = guideShown !== false;
   guideBox.addEventListener('change', () => onToggleGuide && onToggleGuide(guideBox.checked === true));
 
+  const scene = el('select', { id: 'set-scene' }, SCENES.map((x) => el('option', { value: x.id }, x.label)));
+  scene.value = SCENES.some((x) => x.id === settings.scene) ? settings.scene : 'plain';
+  scene.addEventListener('change', () => update({ scene: scene.value }));
+
+  const coloured = el('input', { type: 'checkbox', id: 'set-coloured' });
+  coloured.checked = settings.coloured_shapes === true;
+  coloured.addEventListener('change', () => update({ coloured_shapes: coloured.checked === true }));
+
   const close = el('button', { type: 'button', class: 'text-btn' }, 'Close');
 
   const panel = el('aside', { class: 'settings-panel', role: 'dialog', 'aria-modal': 'false', 'aria-labelledby': 'settings-title', hidden: true },
@@ -192,6 +212,13 @@ export function createSettingsPanel({ childId, initial, onChange, onTestSound, g
       el('div', { class: 'check' }, contrastNormal, el('label', { for: 'set-contrast-normal' }, 'Normal')),
       el('div', { class: 'check' }, contrastHigh, el('label', { for: 'set-contrast-high' }, 'High'))),
     el('div', { class: 'check' }, animations, el('label', { for: 'set-animations' }, 'Animations on')),
+    el('div', { class: 'row' },
+      el('label', { for: 'set-scene' }, 'Picture behind the lesson'),
+      scene,
+      el('p', { class: 'note' }, 'Plain is calmest. Pictures never move and stay faint behind the cards.')),
+    el('div', { class: 'row' },
+      el('div', { class: 'check' }, coloured, el('label', { for: 'set-coloured' }, 'Coloured shapes in Lesson 1')),
+      el('p', { class: 'note' }, 'Harder: "Touch the red square" needs colour and shape at once. Best after Lesson 5. Takes effect when Lesson 1 is next opened.')),
     el('div', { class: 'row' },
       el('div', { class: 'check' }, guideBox, el('label', { for: 'set-guide' }, 'Show Moby, the helper')),
       el('p', { class: 'note' }, 'Turn off for a plainer screen. This is remembered on this device only.')),

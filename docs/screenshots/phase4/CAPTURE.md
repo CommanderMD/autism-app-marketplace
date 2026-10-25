@@ -21,6 +21,11 @@ written there.
 - `lesson3-otter-arrives.png` — the first earned friend: Otter joins Moby on the
   lesson-complete panel after the third completed lesson (Owla after the sixth).
 
+- `lesson1-plain.png`, `lesson1-jungle-coloured.png`, `lesson1-solar-coloured.png`,
+  `lesson1-speedway.png` — scene backgrounds (static, muted SVG placeholders until
+  the illustrated scenes arrive) and the coloured-shapes switch: "Touch the red
+  circle" with distractors that differ by shape or colour, never both.
+
 The companion sprites in `public/img/act1/` were cut from one approved
 character sheet (Moby ×9 poses, Owla ×2, Otter ×2) so every pose shares the
 same proportions, then quantised to 128 colours at 360px.

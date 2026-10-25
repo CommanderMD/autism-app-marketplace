@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1600 1000" preserveAspectRatio="xMidYMid slice">
+<rect width="1600" height="1000" fill="#eef3fb"/>
+<g fill="#c9d6ee"><circle cx="120" cy="90" r="4"/><circle cx="300" cy="160" r="3"/><circle cx="520" cy="60" r="3"/><circle cx="880" cy="110" r="4"/><circle cx="1180" cy="70" r="3"/><circle cx="1420" cy="150" r="4"/><circle cx="1500" cy="420" r="3"/><circle cx="90" cy="520" r="3"/><circle cx="240" cy="880" r="4"/><circle cx="700" cy="940" r="3"/><circle cx="1300" cy="900" r="4"/><circle cx="1560" cy="760" r="3"/></g>
+<circle cx="160" cy="820" r="120" fill="#f6dfb0" stroke="#e5c27c" stroke-width="6"/>
+<circle cx="1420" cy="230" r="70" fill="#d7c4ee" stroke="#b9a0dc" stroke-width="6"/>
+<ellipse cx="1420" cy="230" rx="120" ry="24" fill="none" stroke="#b9a0dc" stroke-width="8"/>
+<circle cx="1480" cy="860" r="48" fill="#f3c9bc" stroke="#e0a28f" stroke-width="5"/>
+<circle cx="110" cy="200" r="40" fill="#bfe0da" stroke="#8fc7bc" stroke-width="5"/>
+<circle cx="760" cy="80" r="26" fill="#d9dde6" stroke="#b7bfcc" stroke-width="4"/>
+</svg>

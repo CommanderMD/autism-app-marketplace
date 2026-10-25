@@ -152,8 +152,13 @@ function createApp({ childId, settings: initialSettings, completed }) {
     if (!LESSON_ID_RE.test(id) || !CANONICAL_ORDER.includes(id)) throw new Error('unknown lesson');
     if (loaded.has(id)) return loaded.get(id);
     const mod = await import(`../lessons/${id}.js`);
-    loaded.set(id, mod.default);
-    return mod.default;
+    // Lesson 01 has a combined-cue step set; the adult's switch picks it.
+    // The lesson object keeps the shared render/check; only steps differ.
+    const lesson = settings.coloured_shapes === true && Array.isArray(mod.colouredSteps)
+      ? Object.freeze({ ...mod.default, steps: mod.colouredSteps })
+      : mod.default;
+    loaded.set(id, lesson);
+    return lesson;
   }
 
   async function start(lessonId, stepIndex) {

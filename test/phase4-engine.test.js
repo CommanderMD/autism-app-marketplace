@@ -1,4 +1,5 @@
 import { describe, it, expect } from "vitest";
+import { colouredSteps } from "../public/apps/act1/lessons/01-shapes.js";
 import { LESSON_ORDER } from "../src/routes/progress.js";
 import {
   LESSON_SHAPE, MODES, CANONICAL_ORDER, validateLesson, validateCurriculum, renderStep,
@@ -533,6 +534,38 @@ describe("9. determinism", () => {
     for (const l of ALL) {
       const ctx = { index: 0, total: l.steps.length, settings: SETTINGS, isFirst: true, isLast: false };
       expect(l.render(l.steps[0], ctx)).toEqual(l.render(l.steps[0], ctx));
+    }
+  });
+});
+
+
+describe("lesson 01 coloured variant (combined cue)", () => {
+  it("validates under the same contract, same step ids, and every key is a coloured shape", () => {
+    const base = LESSONS.find((l) => l.id === "01-shapes");
+    const variant = { ...base, steps: colouredSteps };
+    expect(() => validateLesson(variant)).not.toThrow();
+    expect(colouredSteps.map((s) => s.id)).toEqual(base.steps.map((s) => s.id));
+    for (const s of colouredSteps) {
+      expect(s.prompt).toMatch(/^Touch the (red|blue|yellow|green|orange|purple) (circle|square|triangle|rectangle|star)\.$/);
+      for (const c of s.choices) {
+        expect(c.svg).toMatch(/^(circle|square|triangle|rectangle|star)-(red|blue|yellow|green|orange|purple)$/);
+        expect(Object.hasOwn(SVG, c.svg)).toBe(true);
+        expect(c.label).toContain(c.svg.split("-")[1]); // colour word always in the label
+      }
+      // distractors differ by shape OR colour, never both: at least one shares an attribute with the answer
+      const right = s.choices.find((c) => c.correct);
+      const [rs, rc] = right.svg.split("-");
+      for (const c of s.choices.filter((x) => !x.correct)) {
+        const [cs, cc] = c.svg.split("-");
+        expect(cs === rs || cc === rc, `${s.id} ${c.svg}`).toBe(true);
+      }
+    }
+  });
+
+  it("every prompt in every lesson says Touch, never Tap", () => {
+    for (const l of LESSONS) for (const s of l.steps) {
+      expect(s.prompt).not.toMatch(/\bTap\b/);
+      expect(s.audio).not.toMatch(/\bTap\b/);
     }
   });
 });

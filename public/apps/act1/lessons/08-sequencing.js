@@ -1,6 +1,6 @@
 import { choice, defineLesson, sequence } from '../engine/lesson.js';
 
-const PROMPT_TAIL = 'Tap the pictures in order.';
+const PROMPT_TAIL = 'Touch the pictures in order.';
 const routine = (id, name, choices, answer) =>
   sequence(id, `${name}. ${PROMPT_TAIL}`, `${name}. ${PROMPT_TAIL}`, choices, answer);
 

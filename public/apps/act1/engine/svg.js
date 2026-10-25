@@ -176,6 +176,22 @@ for (let n = 1; n <= 10; n++) {
 for (const [name, hex] of Object.entries(PALETTE)) {
   ENTRIES[`color-${name}`] = swatch(hex);
 }
+// Coloured shapes for the combined-cue variant of lesson 01 ("Touch the red
+// square"). Every one is outlined in INK so yellow keeps a visible edge on
+// white, and the label always names colour + shape, so colour is never the
+// only cue.
+const SHAPE_BODIES = {
+  circle: (fill) => `<circle cx="50" cy="50" r="40" fill="${fill}" stroke="${INK}" stroke-width="4"/>`,
+  square: (fill) => `<rect x="12" y="12" width="76" height="76" fill="${fill}" stroke="${INK}" stroke-width="4"/>`,
+  triangle: (fill) => `<polygon points="50,10 92,88 8,88" fill="${fill}" stroke="${INK}" stroke-width="4" stroke-linejoin="round"/>`,
+  rectangle: (fill) => `<rect x="6" y="28" width="88" height="44" fill="${fill}" stroke="${INK}" stroke-width="4"/>`,
+  star: (fill) => `<polygon points="50,11 60,39.2 89.9,40 66.2,58.3 74.7,87 50,70 25.3,87 33.8,58.3 10.1,40 40,39.2" fill="${fill}" stroke="${INK}" stroke-width="4" stroke-linejoin="round"/>`,
+};
+for (const [shape, body] of Object.entries(SHAPE_BODIES)) {
+  for (const [name, hex] of Object.entries(PALETTE)) {
+    ENTRIES[`${shape}-${name}`] = body(hex);
+  }
+}
 
 export const SVG = Object.freeze(
   Object.fromEntries(Object.entries(ENTRIES).map(([k, body]) => [k, wrap(body)]))
