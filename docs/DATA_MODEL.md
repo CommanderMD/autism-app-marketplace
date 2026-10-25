@@ -35,7 +35,41 @@ children (id PK, parent_id → parents.id, school_id → schools.id)
 | `schools` | School organisation. A `school_admin` user points at one via `users.school_id`. |
 | `children` | Child record. No email, no password, no login. |
 | `child_app_access` | Which apps a child may use; `granted_by` records the adult user who granted it. |
-| `app_usage` | Per-session usage/progress for a child. |
+| `app_usage` | One row per child, app and UTC day: seconds/minutes, activities, score (unique key since 004). |
+
+## Tables added in Phases 3–5
+
+```
+schools ◄── school_invites (code PK, school_id, role, email?, expires_at, used_at)      004
+schools ◄── school_licenses (id PK, school_id, app_id, funding_source_id, seats,        008
+                             starts_at, ends_at?)  ──► funding_sources (id PK)
+children ◄── child_settings  (child_id, app_id PK; volume, flash_intensity,            005/006
+                              animation_speed, contrast, animations, safe_mode,
+                              scene, coloured_shapes)
+children ◄── lesson_progress (child_id, app_id, lesson_id PK; step_index,              005
+                              completed, attempts)
+children ◄── usage_daily     (child_id, app_id, day PK; seconds, minutes,              009
+                              activities, score, rolled_at)
+apps     ◄── app_standards   (app_id, standard_id, lesson_id PK) ──► standards (id PK)  007
+audit_log (id, at, actor_id, actor_role, action, target_type, target_id, detail)       009
+_migrations (name PK, applied_at)                                                      004
+```
+
+| Table | Role | Child data? |
+|---|---|---|
+| `child_settings` | Sensory profile per (child, app); a missing row means defaults, safe mode on. | ids + numbers/booleans |
+| `lesson_progress` | Resume point and unlock chain per lesson. | ids + numbers |
+| `usage_daily` | Nightly rollup of closed days of `app_usage` (src/rollup.js); the summary reads this first. | ids + numbers |
+| `standards` | An IEP-style goal ("Identifies basic shapes"), domain, optional external code. | none |
+| `app_standards` | Which app/lesson works on which goal; `lesson_id ''` = whole app. | none |
+| `funding_sources` | `school`, `grant`, `district`, `self`. | none |
+| `school_licenses` | Seats a school holds for an app in a date window; grants to the school's children are checked against the pool. | none |
+| `audit_log` | Admin and school-admin actions; `detail` is ids and counts only, the writer strips name/email-like keys. No IP. | **never** |
+| `school_invites` | One-time codes to join a school at registration. | none |
+
+Rows in `usage_daily`, `lesson_progress`, `child_settings` are reachable only
+through the same ownership filter as `children` (every query joins or
+subqueries on the caller's scope).
 
 ## Who can see which child
 
@@ -131,6 +165,16 @@ for one child, with no password and no PII. It must not be a `users` row.
 - Login: 10 attempts per minute per IP (KV counter `ratelimit:login:<ip>`).
   Failed logins wait about 1 second and return the same message whether or not
   the email exists.
+
+## What leaves the server for a child
+
+- The launch gate puts only the child's opaque id in the page
+  (`<meta name="child-id">`). The Act 1 shell never stores it.
+- The service worker caches the gate page and the settings/progress answers
+  for that id (ids, booleans, numbers); the offline queue holds progress
+  request bodies. Sign-out deletes both. See `docs/ARCHITECTURE.md`.
+- The language choice (`localStorage.lang`) is a device preference, not a
+  child setting.
 
 ## Test data rule (A4)
 
