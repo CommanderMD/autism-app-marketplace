@@ -260,6 +260,8 @@ function createApp({ childId, settings: initialSettings, completed }) {
   function topbar(lesson, view) {
     const pct = view.progress.total ? Math.round(((view.progress.index) / view.progress.total) * 100) : 0;
     const gear = svgLike('gear');
+    const fill = el('span');
+    fill.style.width = `${pct}%`; // CSSOM, not a style attribute: the CSP has no unsafe-inline
     const settingsBtn = el('button', { type: 'button', class: 'icon-btn', 'aria-label': 'Settings for grown-ups', 'aria-haspopup': 'dialog' }, gear, 'Settings');
     settingsBtn.addEventListener('click', () => panel.toggle());
     return el('header', { class: 'topbar' },
@@ -268,7 +270,7 @@ function createApp({ childId, settings: initialSettings, completed }) {
         el('div', { class: 'progress', 'aria-label': 'Progress' },
           el('span', {}, `${view.progress.index + 1} of ${view.progress.total}`),
           el('div', { class: 'progress-bar', role: 'progressbar', 'aria-valuemin': '0', 'aria-valuemax': String(view.progress.total), 'aria-valuenow': String(view.progress.index) },
-            el('span', { style: `width:${pct}%` })))),
+            fill))),
       settingsBtn);
   }
 

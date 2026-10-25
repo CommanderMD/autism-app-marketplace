@@ -1,5 +1,7 @@
 import { json, readJson } from '../http.js';
-import { REACTIVATE_ON_CONFLICT } from './children.js';
+import { REACTIVATE_ON_CONFLICT, GRANT_LIVE } from './children.js';
+import { requireSeats } from './licenses.js';
+import { audit } from '../audit.js';
 
 const MAX_BULK_IDS = 500;
 const INVITE_ALPHABET = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
@@ -41,6 +43,16 @@ export async function handleBulkGrant(request, env, user) {
     return json({ error: `${rejected} child_id(s) are not in your school; nothing was granted`, rejected }, 403);
   }
 
+  // Funding (Phase 5): only children without a live grant take a new seat.
+  // All-or-nothing, like the ownership check above.
+  const held = await env.DB
+    .prepare(`SELECT COUNT(*) AS n FROM json_each(?) j JOIN child_app_access a ON a.child_id = j.value
+              WHERE a.app_id = ? AND ${GRANT_LIVE}`)
+    .bind(idsJson, appId)
+    .first();
+  const denied = await requireSeats(env, user.school_id, appId, childIds.length - held.n);
+  if (denied) return denied;
+
   // The insert re-applies the school filter, so even a concurrent change of a
   // child's school cannot grant outside it.
   const result = await env.DB
@@ -51,6 +63,8 @@ export async function handleBulkGrant(request, env, user) {
     .run();
 
   const granted = result.meta.changes;
+  await audit(env, { actor: user, action: 'grant.bulk', targetType: 'app', targetId: appId,
+    detail: { school_id: user.school_id, requested: childIds.length, granted } });
   return json({ granted, already_granted: childIds.length - granted, app_id: appId });
 }
 
@@ -91,6 +105,7 @@ export async function handleCreateInvite(request, env, user) {
       return json({ error: 'Internal error' }, 500);
     }
     const invite = await env.DB.prepare('SELECT code, expires_at FROM school_invites WHERE code = ?').bind(code).first();
+    await audit(env, { actor: user, action: 'invite.create', targetType: 'school', targetId: user.school_id, detail: { role, bound_to_email: email !== null } });
     return json(invite, 201);
   }
   return json({ error: 'Internal error' }, 500);

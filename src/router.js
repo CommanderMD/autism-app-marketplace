@@ -12,8 +12,14 @@ import { handlePlay } from './routes/play.js';
 import { handleBulkGrant, handleCreateInvite, handleRedeemInvite } from './routes/school.js';
 import {
   handleAdminListApps, handleAdminCreateApp, handleAdminUpdateApp,
-  handleAdminListSchools, handleAdminCreateSchool, handleAdminAssignSchool
+  handleAdminListSchools, handleAdminCreateSchool, handleAdminAssignSchool, handleAdminAudit
 } from './routes/admin.js';
+import { handleAppStandards, handleChildGoals } from './routes/standards.js';
+import {
+  handleSchoolLicenses, handleAdminListLicenses, handleAdminCreateLicense, handleFundingSources
+} from './routes/licenses.js';
+import { rollupUsage } from './rollup.js';
+import { enforceSameOrigin, withSecurityHeaders } from './security.js';
 import { requireAuth } from './auth/middleware.js';
 
 const ALL_ROLES = ['parent', 'school_admin', 'platform_admin'];
@@ -41,12 +47,21 @@ function forbidden() {
 export async function handle(request, env, ctx) {
   // An uncaught exception would become the platform's HTML error page; answer
   // with JSON instead and never send internals (messages, stacks) to the client.
+  // Every response, including those two, leaves through withSecurityHeaders.
+  let url;
   try {
-    return await route(request, env);
+    url = new URL(request.url);
+  } catch {
+    return withSecurityHeaders(json({ error: 'Malformed URL' }, 400), new URL('http://invalid/'));
+  }
+  try {
+    const refused = enforceSameOrigin(request, url);
+    const response = refused || await route(request, env);
+    return withSecurityHeaders(response, url);
   } catch (err) {
-    if (err instanceof URIError) return json({ error: 'Malformed URL' }, 400);
+    if (err instanceof URIError) return withSecurityHeaders(json({ error: 'Malformed URL' }, 400), url);
     console.error('Unhandled error', err);
-    return json({ error: 'Internal error' }, 500);
+    return withSecurityHeaders(json({ error: 'Internal error' }, 500), url);
   }
 }
 
@@ -68,6 +83,13 @@ async function route(request, env) {
   const appMatch = path.match(/^\/apps\/([^/]+)$/);
   if (appMatch) {
     return handleGetAppById(request, env, decodeURIComponent(appMatch[1]));
+  }
+
+  // Public: the IEP goals an app works on. Describes the app, never a child.
+  const standardsMatch = path.match(/^\/apps\/([^/]+)\/standards$/);
+  if (standardsMatch) {
+    if (method !== 'GET') return methodNotAllowed('GET');
+    return handleAppStandards(request, env, decodeURIComponent(standardsMatch[1]));
   }
 
   // Launch gate: an HTML page, so it must be matched before the JSON 404
@@ -178,6 +200,12 @@ async function handleApi(request, env, path, method) {
     return handleGetProgress(request, env, user, decodeURIComponent(progressMatch[1]));
   }
 
+  const goalsMatch = path.match(/^\/api\/children\/([^/]+)\/goals$/);
+  if (goalsMatch) {
+    if (method !== 'GET') return methodNotAllowed('GET');
+    return handleChildGoals(request, env, user, decodeURIComponent(goalsMatch[1]));
+  }
+
   if (path === '/api/progress') {
     if (method !== 'POST') return methodNotAllowed('POST');
     return handlePostProgress(request, env, user);
@@ -206,6 +234,9 @@ async function handleApi(request, env, path, method) {
     if (path === '/api/school/invites') {
       return method === 'POST' ? handleCreateInvite(request, env, user) : methodNotAllowed('POST');
     }
+    if (path === '/api/school/licenses') {
+      return method === 'GET' ? handleSchoolLicenses(request, env, user) : methodNotAllowed('GET');
+    }
     return json({ error: 'Not Found' }, 404);
   }
 
@@ -214,26 +245,51 @@ async function handleApi(request, env, path, method) {
 
     if (path === '/api/admin/apps') {
       if (method === 'GET') return handleAdminListApps(request, env);
-      if (method === 'POST') return handleAdminCreateApp(request, env);
+      if (method === 'POST') return handleAdminCreateApp(request, env, user);
       return methodNotAllowed('GET, POST');
     }
 
     const adminAppMatch = path.match(/^\/api\/admin\/apps\/([^/]+)$/);
     if (adminAppMatch) {
       if (method !== 'PATCH') return methodNotAllowed('PATCH');
-      return handleAdminUpdateApp(request, env, decodeURIComponent(adminAppMatch[1]));
+      return handleAdminUpdateApp(request, env, user, decodeURIComponent(adminAppMatch[1]));
     }
 
     if (path === '/api/admin/schools') {
       if (method === 'GET') return handleAdminListSchools(request, env);
-      if (method === 'POST') return handleAdminCreateSchool(request, env);
+      if (method === 'POST') return handleAdminCreateSchool(request, env, user);
       return methodNotAllowed('GET, POST');
+    }
+
+    const licensesMatch = path.match(/^\/api\/admin\/schools\/([^/]+)\/licenses$/);
+    if (licensesMatch) {
+      const schoolId = decodeURIComponent(licensesMatch[1]);
+      if (method === 'GET') return handleAdminListLicenses(request, env, schoolId);
+      if (method === 'POST') return handleAdminCreateLicense(request, env, user, schoolId);
+      return methodNotAllowed('GET, POST');
+    }
+
+    if (path === '/api/admin/funding-sources') {
+      return method === 'GET' ? handleFundingSources(request, env) : methodNotAllowed('GET');
     }
 
     const userSchoolMatch = path.match(/^\/api\/admin\/users\/([^/]+)\/school$/);
     if (userSchoolMatch) {
       if (method !== 'POST') return methodNotAllowed('POST');
-      return handleAdminAssignSchool(request, env, decodeURIComponent(userSchoolMatch[1]));
+      return handleAdminAssignSchool(request, env, user, decodeURIComponent(userSchoolMatch[1]));
+    }
+
+    // Same work as the nightly cron, on demand (a backfill after an outage).
+    // ?since=YYYY-MM-DD widens the window; default is the last 3 closed days.
+    if (path === '/api/admin/usage/rollup') {
+      if (method !== 'POST') return methodNotAllowed('POST');
+      const since = new URL(request.url).searchParams.get('since');
+      if (since !== null && !/^\d{4}-\d{2}-\d{2}$/.test(since)) return json({ error: 'since must be YYYY-MM-DD' }, 400);
+      return json(await rollupUsage(env, { since, actor: user }));
+    }
+
+    if (path === '/api/admin/audit') {
+      return method === 'GET' ? handleAdminAudit(request, env) : methodNotAllowed('GET');
     }
 
     return json({ error: 'Not Found' }, 404);

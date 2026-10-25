@@ -1,4 +1,5 @@
 import { json, readJson } from '../http.js';
+import { audit, listAudit } from '../audit.js';
 
 // platform_admin only; the router enforces the role before calling these.
 
@@ -39,7 +40,7 @@ export async function handleAdminListApps(request, env) {
   return json(results);
 }
 
-export async function handleAdminCreateApp(request, env) {
+export async function handleAdminCreateApp(request, env, user) {
   const body = await readJson(request);
   if (!body) return json({ error: 'Invalid JSON body' }, 400);
   for (const required of ['name', 'category']) {
@@ -63,11 +64,12 @@ export async function handleAdminCreateApp(request, env) {
     if (String(err && err.message).includes('UNIQUE')) return json({ error: 'An app with this id already exists' }, 409);
     return json({ error: 'Internal error' }, 500);
   }
+  await audit(env, { actor: user, action: 'app.create', targetType: 'app', targetId: id, detail: { fields: columns } });
   const app = await env.DB.prepare(`SELECT ${APP_COLUMNS} FROM apps WHERE id = ?`).bind(id).first();
   return json(app, 201);
 }
 
-export async function handleAdminUpdateApp(request, env, id) {
+export async function handleAdminUpdateApp(request, env, user, id) {
   const body = await readJson(request);
   if (!body) return json({ error: 'Invalid JSON body' }, 400);
   const { values, error } = pickAppFields(body, Object.keys(APP_FIELDS));
@@ -84,6 +86,8 @@ export async function handleAdminUpdateApp(request, env, id) {
     .bind(...Object.values(values), id)
     .run();
   if (result.meta.changes === 0) return json({ error: 'App not found' }, 404);
+  await audit(env, { actor: user, action: 'app.update', targetType: 'app', targetId: id,
+    detail: { fields, is_active: values.is_active ?? null } });
   const app = await env.DB.prepare(`SELECT ${APP_COLUMNS} FROM apps WHERE id = ?`).bind(id).first();
   return json(app);
 }
@@ -93,7 +97,7 @@ export async function handleAdminListSchools(request, env) {
   return json(results);
 }
 
-export async function handleAdminCreateSchool(request, env) {
+export async function handleAdminCreateSchool(request, env, user) {
   const body = await readJson(request);
   if (!body) return json({ error: 'Invalid JSON body' }, 400);
   const name = typeof body.name === 'string' ? body.name.trim() : '';
@@ -108,11 +112,12 @@ export async function handleAdminCreateSchool(request, env) {
 
   const id = crypto.randomUUID();
   await env.DB.prepare('INSERT INTO schools (id, name, contact_email) VALUES (?, ?, ?)').bind(id, name, contactEmail).run();
+  await audit(env, { actor: user, action: 'school.create', targetType: 'school', targetId: id });
   const school = await env.DB.prepare(`SELECT ${SCHOOL_COLUMNS} FROM schools WHERE id = ?`).bind(id).first();
   return json(school, 201);
 }
 
-export async function handleAdminAssignSchool(request, env, userId) {
+export async function handleAdminAssignSchool(request, env, actor, userId) {
   const body = await readJson(request);
   const schoolId = body && typeof body.school_id === 'string' ? body.school_id : '';
   if (!schoolId) return json({ error: 'school_id is required' }, 400);
@@ -125,6 +130,19 @@ export async function handleAdminAssignSchool(request, env, userId) {
   if (!school) return json({ error: 'school_id does not exist' }, 400);
 
   await env.DB.prepare('UPDATE users SET school_id = ? WHERE id = ?').bind(schoolId, userId).run();
+  await audit(env, { actor, action: 'user.assign_school', targetType: 'user', targetId: userId, detail: { school_id: schoolId } });
   const user = await env.DB.prepare('SELECT id, email, role, school_id FROM users WHERE id = ?').bind(userId).first();
   return json(user);
+}
+
+// GET /api/admin/audit?limit=&before= - newest first. detail is ids and
+// counts only (src/audit.js strips anything else before it is written).
+export async function handleAdminAudit(request, env) {
+  const url = new URL(request.url);
+  const limit = Number(url.searchParams.get('limit') || 100);
+  const beforeRaw = url.searchParams.get('before');
+  const before = beforeRaw === null ? null : Number(beforeRaw);
+  if (!Number.isInteger(limit) || limit < 1 || limit > 500) return json({ error: 'limit must be an integer 1-500' }, 400);
+  if (before !== null && (!Number.isInteger(before) || before < 1)) return json({ error: 'before must be a positive integer id' }, 400);
+  return json(await listAudit(env, { limit, before }));
 }

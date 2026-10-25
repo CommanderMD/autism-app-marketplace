@@ -39,10 +39,11 @@ function usage(summary) {
     el('h4', {}, 'By day (minutes)'),
     el('ul', { class: 'bars' }, days.map((d) => {
       const value = perDay.get(d) || 0;
+      const fill = el('span', { class: 'bar-fill' });
+      fill.style.width = `${Math.round((value / max) * 100)}%`; // CSSOM: the CSP allows no style attribute
       return el('li', {},
         el('span', {}, dayLabel(d)),
-        el('span', { class: 'bar-track', 'aria-hidden': 'true' },
-          el('span', { class: 'bar-fill', style: `display:block;width:${Math.round((value / max) * 100)}%` })),
+        el('span', { class: 'bar-track', 'aria-hidden': 'true' }, fill),
         el('span', { class: 'value' }, minutes(value)));
     })));
 }

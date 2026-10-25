@@ -396,7 +396,7 @@ tr.is-inactive td { background: var(--surface-inactive); }
   min-height: 28px;
 }
 .bar-track { background: var(--bg); border: 1px solid var(--border-strong); border-radius: 4px; height: 14px; }
-.bar-fill { background: var(--accent); height: 100%; border-radius: 3px; transition: width var(--motion); }
+.bar-fill { display: block; background: var(--accent); height: 100%; border-radius: 3px; transition: width var(--motion); }
 .bars .value { text-align: right; font-variant-numeric: tabular-nums; }
 
 /* ---------- responsive ---------- */

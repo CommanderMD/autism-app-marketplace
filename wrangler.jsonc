@@ -27,5 +27,10 @@
   },
   "observability": {
     "enabled": true
+  },
+  // Nightly usage rollup (src/rollup.js), 03:15 UTC, after the US day has
+  // closed everywhere. Phase 5.
+  "triggers": {
+    "crons": ["15 3 * * *"]
   }
 }
