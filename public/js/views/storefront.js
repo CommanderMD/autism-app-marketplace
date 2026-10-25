@@ -2,8 +2,9 @@
 // lives in the URL (/?category=finance). No login required.
 import { api } from '../api.js';
 import { el, on, replace, ageRange } from '../ui.js';
+import { t } from '../i18n.js';
 
-const ALL = 'All';
+const ALL = 'All'; // URL value; shown through t('storefront.all')
 
 function categoriesOf(apps) {
   return [...new Set(apps.map((a) => a.category).filter(Boolean))].sort();
@@ -22,7 +23,7 @@ function card(app) {
     el('p', { class: 'meta' }, `${app.category}${app.subcategory ? ` · ${app.subcategory}` : ''} · ${ageRange(app)}`),
     app.description ? el('p', {}, app.description) : null,
     el('a', { class: 'btn secondary', href: `/app/${encodeURIComponent(app.id)}` },
-      'View details', el('span', { class: 'visually-hidden' }, ` for ${app.name}`)));
+      t('storefront.view'), el('span', { class: 'visually-hidden' }, t('storefront.view_for', { name: app.name }))));
 }
 
 // Roving tabindex: one Tab stop for the whole row; arrow keys move, Home/End jump.
@@ -45,14 +46,14 @@ function filterKeys(list) {
 }
 
 export async function render({ main, setTitle, status }) {
-  setTitle('Apps');
-  status.textContent = 'Loading apps…';
+  setTitle(t('storefront.title'));
+  status.textContent = t('storefront.loading');
   const apps = await api('/apps');
   const categories = categoriesOf(apps);
 
-  const filterList = el('ul', { class: 'filters', 'aria-label': 'Filter by category' });
+  const filterList = el('ul', { class: 'filters', 'aria-label': t('storefront.filter_label') });
   const grid = el('ul', { class: 'grid', 'aria-labelledby': 'apps-heading' });
-  const heading = el('h2', { id: 'apps-heading', class: 'visually-hidden' }, 'App list');
+  const heading = el('h2', { id: 'apps-heading', class: 'visually-hidden' }, t('storefront.list'));
 
   function show(category) {
     const buttons = [...filterList.querySelectorAll('button')];
@@ -64,15 +65,15 @@ export async function render({ main, setTitle, status }) {
     if (!buttons.some((b) => b.tabIndex === 0)) buttons[0].tabIndex = 0;
     const visible = category === ALL ? apps : apps.filter((a) => a.category === category);
     if (visible.length === 0) {
-      replace(grid, el('li', { class: 'notice' }, 'No apps in this category yet.'));
+      replace(grid, el('li', { class: 'notice' }, t('storefront.empty')));
     } else {
       replace(grid, visible.map(card));
     }
-    setTitle(category === ALL ? 'Apps' : `${category} apps`);
-    const noun = visible.length === 1 ? 'app' : 'apps';
+    setTitle(category === ALL ? t('storefront.title') : t('storefront.category_apps', { category }));
+    const noun = visible.length === 1 ? t('storefront.app_one') : t('storefront.app_many');
     status.textContent = category === ALL
-      ? `Showing all ${visible.length} ${noun}.`
-      : `Showing ${visible.length} ${noun} in ${category}.`;
+      ? t('storefront.showing_all', { count: visible.length, noun })
+      : t('storefront.showing_in', { count: visible.length, noun, category });
   }
 
   function choose(category) {
@@ -90,12 +91,12 @@ export async function render({ main, setTitle, status }) {
       dataset: { category },
       'aria-pressed': 'false',
       onClick: () => choose(category),
-    }, category))));
+    }, category === ALL ? t('storefront.all') : category))));
   filterKeys(filterList);
 
   replace(main,
-    el('h1', {}, 'Apps for learning and life skills'),
-    el('p', { class: 'muted' }, 'Browse freely. Parents and schools sign in to give apps to children.'),
+    el('h1', {}, t('storefront.heading')),
+    el('p', { class: 'muted' }, t('storefront.intro')),
     filterList,
     heading,
     grid);

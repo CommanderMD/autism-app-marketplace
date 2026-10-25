@@ -17,6 +17,7 @@
 
 import { api } from '/js/api.js';
 import { el, replace } from '/js/ui.js';
+import { t, languageSwitcher } from '/js/i18n.js';
 
 export const STORAGE_KEY = 'act1.settings.v1';
 export const GUIDE_KEY = 'act1.guide.v1';
@@ -121,8 +122,8 @@ export function createSettingsPanel({ childId, initial, onChange, onTestSound, g
     pending = {};
     if (Object.keys(body).length === 1) return;
     api(`/api/children/${encodeURIComponent(childId)}/settings`, { method: 'PUT', body })
-      .then(() => { note.textContent = 'Saved.'; })
-      .catch(() => { note.textContent = 'Saved on this device. It will sync when you are back online.'; });
+      .then(() => { note.textContent = t('settings.saved'); })
+      .catch(() => { note.textContent = t('settings.saved_offline'); });
   }
 
   function update(patch) {
@@ -146,7 +147,7 @@ export function createSettingsPanel({ childId, initial, onChange, onTestSound, g
     volumeValue.textContent = volume.value;
     update({ volume: Number(volume.value) });
   });
-  const testSound = el('button', { type: 'button', class: 'text-btn' }, 'Test sound');
+  const testSound = el('button', { type: 'button', class: 'text-btn' }, t('settings.test_sound'));
   testSound.addEventListener('click', () => onTestSound && onTestSound());
 
   const flashValue = el('span', { class: 'value' }, String(settings.flash_intensity));
@@ -186,7 +187,7 @@ export function createSettingsPanel({ childId, initial, onChange, onTestSound, g
   guideBox.checked = guideShown !== false;
   guideBox.addEventListener('change', () => onToggleGuide && onToggleGuide(guideBox.checked === true));
 
-  const scene = el('select', { id: 'set-scene' }, SCENES.map((x) => el('option', { value: x.id }, x.label)));
+  const scene = el('select', { id: 'set-scene' }, SCENES.map((x) => el('option', { value: x.id }, t(`settings.scene_${x.id}`))));
   scene.value = SCENES.some((x) => x.id === settings.scene) ? settings.scene : 'plain';
   scene.addEventListener('change', () => update({ scene: scene.value }));
 
@@ -194,37 +195,40 @@ export function createSettingsPanel({ childId, initial, onChange, onTestSound, g
   coloured.checked = settings.coloured_shapes === true;
   coloured.addEventListener('change', () => update({ coloured_shapes: coloured.checked === true }));
 
-  const close = el('button', { type: 'button', class: 'text-btn' }, 'Close');
+  const close = el('button', { type: 'button', class: 'text-btn' }, t('settings.close'));
 
   const panel = el('aside', { class: 'settings-panel', role: 'dialog', 'aria-modal': 'false', 'aria-labelledby': 'settings-title', hidden: true },
-    el('h2', { id: 'settings-title' }, 'Settings for grown-ups'),
+    el('h2', { id: 'settings-title' }, t('settings.heading')),
     el('div', { class: 'row' },
-      el('label', { for: 'set-volume' }, 'Volume ', volumeValue),
-      el('span', { class: 'visually-hidden', id: 'set-volume-value' }, 'out of 100'),
+      el('label', { for: 'set-volume' }, `${t('settings.volume')} `, volumeValue),
+      el('span', { class: 'visually-hidden', id: 'set-volume-value' }, t('settings.out_of_100')),
       volume, testSound),
     el('div', { class: 'row' },
-      el('label', { for: 'set-flash' }, 'Flash intensity ', flashValue),
-      el('span', { class: 'visually-hidden', id: 'set-flash-value' }, 'out of 100'),
+      el('label', { for: 'set-flash' }, `${t('settings.flash')} `, flashValue),
+      el('span', { class: 'visually-hidden', id: 'set-flash-value' }, t('settings.out_of_100')),
       flash),
-    el('div', { class: 'row' }, el('label', { for: 'set-speed' }, 'Animation speed'), speed),
+    el('div', { class: 'row' }, el('label', { for: 'set-speed' }, t('settings.speed')), speed),
     el('div', { class: 'row' },
-      el('span', { class: 'value' }, 'Contrast'),
-      el('div', { class: 'check' }, contrastNormal, el('label', { for: 'set-contrast-normal' }, 'Normal')),
-      el('div', { class: 'check' }, contrastHigh, el('label', { for: 'set-contrast-high' }, 'High'))),
-    el('div', { class: 'check' }, animations, el('label', { for: 'set-animations' }, 'Animations on')),
+      el('span', { class: 'value' }, t('settings.contrast')),
+      el('div', { class: 'check' }, contrastNormal, el('label', { for: 'set-contrast-normal' }, t('settings.contrast_normal'))),
+      el('div', { class: 'check' }, contrastHigh, el('label', { for: 'set-contrast-high' }, t('settings.contrast_high')))),
+    el('div', { class: 'check' }, animations, el('label', { for: 'set-animations' }, t('settings.animations'))),
     el('div', { class: 'row' },
-      el('label', { for: 'set-scene' }, 'Picture behind the lesson'),
+      el('label', { for: 'set-scene' }, t('settings.scene')),
       scene,
-      el('p', { class: 'note' }, 'Plain is calmest. Pictures never move and stay faint behind the cards.')),
+      el('p', { class: 'note' }, t('settings.scene_note'))),
     el('div', { class: 'row' },
-      el('div', { class: 'check' }, coloured, el('label', { for: 'set-coloured' }, 'Coloured shapes in Lesson 1')),
-      el('p', { class: 'note' }, 'Harder: "Touch the red square" needs colour and shape at once. Best after Lesson 5. Takes effect when Lesson 1 is next opened.')),
+      el('div', { class: 'check' }, coloured, el('label', { for: 'set-coloured' }, t('settings.coloured'))),
+      el('p', { class: 'note' }, t('settings.coloured_note'))),
     el('div', { class: 'row' },
-      el('div', { class: 'check' }, guideBox, el('label', { for: 'set-guide' }, 'Show Moby, the helper')),
-      el('p', { class: 'note' }, 'Turn off for a plainer screen. This is remembered on this device only.')),
+      el('div', { class: 'check' }, guideBox, el('label', { for: 'set-guide' }, t('settings.guide'))),
+      el('p', { class: 'note' }, t('settings.guide_note'))),
     el('div', { class: 'row' },
-      el('div', { class: 'check' }, safeMode, el('label', { for: 'set-safe' }, 'Photosensitivity safe mode')),
-      el('p', { class: 'note' }, 'Keeps flashing and big colour changes off. Leave this on unless you know it is safe for this child.')),
+      el('div', { class: 'check' }, safeMode, el('label', { for: 'set-safe' }, t('settings.safe'))),
+      el('p', { class: 'note' }, t('settings.safe_note'))),
+    el('div', { class: 'row' },
+      languageSwitcher({ visible: true }),
+      el('p', { class: 'note' }, t('settings.language_note'))),
     note,
     close);
 

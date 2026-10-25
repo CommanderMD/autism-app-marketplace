@@ -1,0 +1,87 @@
+{
+  "base": "http://localhost:8787",
+  "at": "2026-10-25T00:46:01.546Z",
+  "results": [
+    {
+      "name": "API carries Kemet-OS headers",
+      "ok": true,
+      "detail": "x-empire-layer=Kemet-OS-Security-v1"
+    },
+    {
+      "name": "API is no-store",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "storefront switches to Spanish (<html lang=\"es\">, heading)",
+      "ok": true,
+      "detail": "es / Apps para aprender y para la vida diaria"
+    },
+    {
+      "name": "app detail shows the 10 IEP goals, in Spanish heading",
+      "ok": true,
+      "detail": "10 goals, \"Objetivos de aprendizaje (PEI)\""
+    },
+    {
+      "name": "Act 1 prompt is Spanish",
+      "ok": true,
+      "detail": "Toca el círculo."
+    },
+    {
+      "name": "gate page carries CSP + X-Frame-Options",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "service worker precached the Act 1 files",
+      "ok": true,
+      "detail": "43 entries"
+    },
+    {
+      "name": "one step reported online",
+      "ok": true,
+      "detail": "step_index 0"
+    },
+    {
+      "name": "Act 1 reloads OFFLINE from the service worker caches",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "offline badge shown",
+      "ok": true,
+      "detail": "Sin conexión"
+    },
+    {
+      "name": "two offline answers queued in IndexedDB, body only",
+      "ok": true,
+      "detail": "2 rows"
+    },
+    {
+      "name": "queue drained to D1 after reconnect",
+      "ok": true,
+      "detail": "attempts 3, step_index 1, 0 left in queue"
+    },
+    {
+      "name": "parent dashboard shows goals with Lesson 1 \"Working on it\"",
+      "ok": true,
+      "detail": "10 goals, 1 working"
+    },
+    {
+      "name": "zero CSP violations in the console",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "no page errors (offline fetch failures excluded)",
+      "ok": true,
+      "detail": ""
+    }
+  ],
+  "console": [
+    "error: Failed to load resource: the server responded with a status of 401 (Unauthorized)",
+    "error: Failed to load resource: net::ERR_INTERNET_DISCONNECTED",
+    "error: Failed to load resource: net::ERR_INTERNET_DISCONNECTED",
+    "error: Failed to load resource: net::ERR_INTERNET_DISCONNECTED"
+  ]
+}

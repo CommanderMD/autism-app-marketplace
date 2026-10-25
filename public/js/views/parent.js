@@ -4,6 +4,7 @@
 import { api } from '../api.js';
 import { requireRole } from '../session.js';
 import { el, replace, field, setFieldError, liveRegion, announce, busy, notice, uniqueId, table } from '../ui.js';
+import { t } from '../i18n.js';
 
 const DAY_MS = 86_400_000;
 
@@ -48,6 +49,24 @@ function usage(summary) {
     })));
 }
 
+// Learning goals (Phase 5): for each granted app that has tagged goals, the
+// child's status per goal from GET /api/children/:id/goals. Read-only; the
+// wording is what a teacher would paste into an IEP progress note.
+function goalsList(goalSets) {
+  const sets = goalSets.filter((g) => !(g instanceof Error) && g.total > 0);
+  if (sets.length === 0) return null;
+  const label = { met: t('goals.met'), working: t('goals.working'), 'not-started': t('goals.not_started') };
+  return el('div', {},
+    el('h3', {}, t('goals.heading')),
+    sets.map((set) => el('div', { class: 'stack' },
+      el('p', {}, t('goals.summary', { met: set.met, total: set.total, app: set.app_name })),
+      el('ul', { class: 'goal-list' }, set.goals.map((g) => el('li', { class: `goal ${g.status}` },
+        el('span', { class: `tag status-${g.status}` }, label[g.status] || g.status),
+        ' ',
+        el('span', {}, g.goal),
+        g.evidence && g.evidence.attempts ? el('span', { class: 'muted' }, ` · ${t('goals.attempts', { n: g.evidence.attempts })}`) : null))))));
+}
+
 // granted_at is a UTC 'YYYY-MM-DD HH:MM:SS' timestamp; only the date is shown.
 function grantedLabel(grantedAt) {
   const date = String(grantedAt || '').slice(0, 10);
@@ -80,8 +99,17 @@ export async function render({ main, setTitle }) {
       Promise.all(children.map((c) =>
         api(`/api/children/${encodeURIComponent(c.id)}/apps`).catch((err) => err))),
     ]);
+    // Goals for every granted app, per child. Apps without tags come back
+    // with total 0 and are left out by goalsList.
+    const goals = await Promise.all(children.map((c, i) => {
+      const list = granted[i] instanceof Error ? [] : granted[i];
+      return Promise.all(list.map((g) =>
+        api(`/api/children/${encodeURIComponent(c.id)}/goals?app_id=${encodeURIComponent(g.app_id)}`)
+          .then((set) => ({ ...set, app_name: g.name }))
+          .catch((err) => err)));
+    }));
     replace(list, children.length
-      ? children.map((child, i) => childCard(child, summaries[i], granted[i], apps))
+      ? children.map((child, i) => childCard(child, summaries[i], granted[i], apps, goals[i]))
       : el('p', {}, 'No children added yet. Use the form above to add one.'));
     for (const selector of [focus].flat().filter(Boolean)) {
       const target = list.querySelector(selector);
@@ -144,7 +172,7 @@ export async function render({ main, setTitle }) {
     });
   }
 
-  function childCard(child, summary, granted, apps) {
+  function childCard(child, summary, granted, apps, goalSets = []) {
     const sel = `[data-child="${CSS.escape(child.id)}"]`;
     const headingId = uniqueId('child');
 
@@ -178,7 +206,8 @@ export async function render({ main, setTitle }) {
       el('h3', {}, 'Give an app'),
       grantArea,
       el('h3', {}, 'Last 7 days'),
-      usage(summary));
+      usage(summary),
+      goalsList(goalSets));
   }
 
   // Add child form. API validation errors are shown next to the field they name.
