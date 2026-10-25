@@ -63,6 +63,34 @@ function parentGrant(app) {
   return area;
 }
 
+// For a signed-in parent: one Play link per child that already has this app,
+// through the launch gate. Built from fresh API calls; nothing is cached.
+async function parentPlayLinks(app) {
+  let children;
+  try {
+    children = await api('/api/children');
+  } catch {
+    return null;
+  }
+  const withApp = [];
+  for (const child of children) {
+    try {
+      const apps = await api(`/api/children/${encodeURIComponent(child.id)}/apps`);
+      if (apps.some((a) => a.app_id === app.id)) withApp.push(child);
+    } catch {
+      /* skip this child; the grant panel still works */
+    }
+  }
+  if (withApp.length === 0) return null;
+  return el('div', { class: 'panel stack' },
+    el('p', {}, withApp.length === 1 ? 'Ready to play:' : 'Ready to play as:'),
+    el('ul', { class: 'stack' }, withApp.map((child) => el('li', {},
+      el('a', {
+        class: 'btn',
+        href: `/apps/${encodeURIComponent(app.id)}/play?child_id=${encodeURIComponent(child.id)}`,
+      }, `Play as ${child.name}`)))));
+}
+
 export async function render({ main, params, setTitle }) {
   const [id] = params;
   let app;
@@ -87,7 +115,7 @@ export async function render({ main, params, setTitle }) {
   if (!app.is_active) {
     action = notice('This app is not currently available to grant.');
   } else if (user && user.role === 'parent') {
-    action = parentGrant(app);
+    action = el('div', { class: 'stack' }, await parentPlayLinks(app), parentGrant(app));
   } else if (user && user.role === 'school_admin') {
     action = el('p', {}, el('a', { class: 'btn', href: '/school' }, 'Grant to children'));
   } else if (!user) {

@@ -6,6 +6,9 @@ import {
   handleCreateChild, handleListChildren, handleGetChild, handleListChildApps, handleGrantApp, handleRevokeApp
 } from './routes/children.js';
 import { handleUsageSummary, handleUsageCsv } from './routes/usage.js';
+import { handleGetSettings, handlePutSettings } from './routes/settings.js';
+import { handlePostProgress, handleGetProgress } from './routes/progress.js';
+import { handlePlay } from './routes/play.js';
 import { handleBulkGrant, handleCreateInvite, handleRedeemInvite } from './routes/school.js';
 import {
   handleAdminListApps, handleAdminCreateApp, handleAdminUpdateApp,
@@ -14,6 +17,10 @@ import {
 import { requireAuth } from './auth/middleware.js';
 
 const ALL_ROLES = ['parent', 'school_admin', 'platform_admin'];
+
+// Module and stylesheet files under public/apps/act1/, plus the debug harness
+// (dev.html; the asset layer's clean URL for it is /apps/act1/dev).
+const ACT1_ASSET = /^\/apps\/act1\/(?:(?:engine|lessons|css|js)\/[a-z0-9][a-z0-9-]*\.(?:js|css)|dev(?:\.html)?)$/;
 
 function methodNotAllowed(allowed) {
   return json({ error: 'Method Not Allowed' }, 405, { Allow: allowed });
@@ -26,7 +33,9 @@ function forbidden() {
 // wrangler.jsonc sets run_worker_first, so every request lands here.
 // /api/*, /auth/*, /apps* and /health are JSON namespaces: an unmatched path
 // inside them is a JSON 404 and never reaches the asset layer (whose SPA
-// fallback would answer with index.html and a 200). Everything else - /,
+// fallback would answer with index.html and a 200). The one HTML route inside
+// them is the launch gate, GET /apps/:id/play; the only static files inside
+// them are the Act 1 module assets (ACT1_ASSET). Everything else - /,
 // /parent, /school, /admin, /app/:id, /login, /css/*, /js/*, deep links -
 // is delegated to static assets.
 export async function handle(request, env, ctx) {
@@ -59,6 +68,24 @@ async function route(request, env) {
   const appMatch = path.match(/^\/apps\/([^/]+)$/);
   if (appMatch) {
     return handleGetAppById(request, env, decodeURIComponent(appMatch[1]));
+  }
+
+  // Launch gate: an HTML page, so it must be matched before the JSON 404
+  // below claims everything else under /apps/.
+  const playMatch = path.match(/^\/apps\/([^/]+)\/play$/);
+  if (playMatch) {
+    if (method !== 'GET') return methodNotAllowed('GET');
+    return handlePlay(request, env, decodeURIComponent(playMatch[1]));
+  }
+
+  // The Act 1 app's own assets (engine, lessons, css, js). Served as static files,
+  // never through the launch gate: the gate is the entry point, not a file server.
+  // Deliberately an allowlist, not "/apps/act1/*": the shell (/apps/act1/) and the
+  // denial page stay JSON 404 here, so they are only ever served by handlePlay,
+  // which reads them from env.ASSETS directly. The pattern admits no '%', so an
+  // encoded path cannot reach them either. act1 only - no other app id.
+  if (ACT1_ASSET.test(path)) {
+    return serveAsset(env, request);
   }
 
   if (path.startsWith('/apps/')) {
@@ -135,6 +162,25 @@ async function handleApi(request, env, path, method) {
     if (method === 'GET') return handleListChildApps(request, env, user, childId);
     if (method === 'POST') return handleGrantApp(request, env, user, childId);
     return methodNotAllowed('GET, POST');
+  }
+
+  const settingsMatch = path.match(/^\/api\/children\/([^/]+)\/settings$/);
+  if (settingsMatch) {
+    const childId = decodeURIComponent(settingsMatch[1]);
+    if (method === 'GET') return handleGetSettings(request, env, user, childId);
+    if (method === 'PUT') return handlePutSettings(request, env, user, childId);
+    return methodNotAllowed('GET, PUT');
+  }
+
+  const progressMatch = path.match(/^\/api\/children\/([^/]+)\/progress$/);
+  if (progressMatch) {
+    if (method !== 'GET') return methodNotAllowed('GET');
+    return handleGetProgress(request, env, user, decodeURIComponent(progressMatch[1]));
+  }
+
+  if (path === '/api/progress') {
+    if (method !== 'POST') return methodNotAllowed('POST');
+    return handlePostProgress(request, env, user);
   }
 
   const childMatch = path.match(/^\/api\/children\/([^/]+)$/);
