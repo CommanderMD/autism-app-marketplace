@@ -11,7 +11,19 @@
   <link rel="stylesheet" href="/apps/word-builder/css/app.css">
 </head>
 <body>
-  <main id="app" aria-live="polite"></main>
+  <!-- js/main.js draws one screen at a time into #screen: the ladder list, a
+       ladder being built, or the "show me how" walk-through. Nothing moves and
+       nothing is spoken until the child taps. -->
+  <main id="app" data-app-id="word-builder">
+    <header class="topbar">
+      <h1 id="title">Word Builder</h1>
+      <button type="button" class="text-btn" id="grownups" hidden>Grown-ups</button>
+    </header>
+
+    <div id="screen"></div>
+
+    <p class="visually-hidden" id="announcer" role="status" aria-live="polite"></p>
+  </main>
   <script type="module" src="/apps/word-builder/js/main.js"></script>
 </body>
 </html>
