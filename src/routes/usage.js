@@ -4,6 +4,21 @@ import { childScope, loadOwnedChild } from './children.js';
 const SUMMARY_DAYS = 7;
 // Last 7 days inclusive of today, UTC (SQLite date('now') is UTC).
 const WINDOW = "u.session_date BETWEEN date('now', '-6 days') AND date('now')";
+
+// Phase 5: the summary reads the nightly rollup (usage_daily, src/rollup.js)
+// first, and falls back to the live app_usage row only for a (child, app, day)
+// that has no rollup row yet - which is always today, and yesterday until the
+// cron has run. Column names are aliased to app_usage's so the queries below
+// did not change.
+export const USAGE_SOURCE = `(
+  SELECT child_id, app_id, day AS session_date, minutes AS minutes_used, activities AS activities_completed
+  FROM usage_daily
+  UNION ALL
+  SELECT a.child_id, a.app_id, a.session_date, a.minutes_used, a.activities_completed
+  FROM app_usage a
+  WHERE NOT EXISTS (SELECT 1 FROM usage_daily d
+                    WHERE d.child_id = a.child_id AND d.app_id = a.app_id AND d.day = a.session_date)
+) u`;
 const CSV_MAX_ROWS = 10000;
 const CSV_HEADER = ['child_name', 'app_name', 'session_date', 'minutes_used', 'activities_completed', 'score'];
 
@@ -22,14 +37,14 @@ async function summarize(env, filter) {
   const [totals, byApp, byDay] = await env.DB.batch([
     env.DB.prepare(`SELECT COALESCE(SUM(u.minutes_used), 0) AS minutes,
                            COALESCE(SUM(u.activities_completed), 0) AS activities
-                    FROM app_usage u WHERE ${where}`).bind(...filter.params),
+                    FROM ${USAGE_SOURCE} WHERE ${where}`).bind(...filter.params),
     env.DB.prepare(`SELECT u.app_id, a.name AS app_name,
                            SUM(u.minutes_used) AS minutes, SUM(u.activities_completed) AS activities
-                    FROM app_usage u LEFT JOIN apps a ON a.id = u.app_id
+                    FROM ${USAGE_SOURCE} LEFT JOIN apps a ON a.id = u.app_id
                     WHERE ${where} GROUP BY u.app_id ORDER BY minutes DESC, u.app_id`).bind(...filter.params),
     env.DB.prepare(`SELECT u.session_date AS date,
                            SUM(u.minutes_used) AS minutes, SUM(u.activities_completed) AS activities
-                    FROM app_usage u WHERE ${where} GROUP BY u.session_date ORDER BY u.session_date`).bind(...filter.params),
+                    FROM ${USAGE_SOURCE} WHERE ${where} GROUP BY u.session_date ORDER BY u.session_date`).bind(...filter.params),
   ]);
   return {
     days: SUMMARY_DAYS,
@@ -66,7 +81,7 @@ export async function handleUsageSummary(request, env, user) {
     const { results: byChild } = await env.DB
       .prepare(`SELECT u.child_id, c.name AS child_name,
                        SUM(u.minutes_used) AS minutes, SUM(u.activities_completed) AS activities
-                FROM app_usage u JOIN children c ON c.id = u.child_id
+                FROM ${USAGE_SOURCE} JOIN children c ON c.id = u.child_id
                 WHERE ${filter.clause} AND ${WINDOW}
                 GROUP BY u.child_id ORDER BY c.name, u.child_id`)
       .bind(...filter.params)

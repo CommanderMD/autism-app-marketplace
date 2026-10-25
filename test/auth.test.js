@@ -54,15 +54,19 @@ describe("migration 003_auth", () => {
     // Every named index from 001_init.sql survives the rebuild (auto PK indexes excluded).
     const idx = await env.DB.prepare("SELECT name FROM sqlite_master WHERE type = 'index' AND name LIKE 'idx_%' ORDER BY name").all();
     expect(idx.results.map((r) => r.name)).toEqual([
+      "idx_app_standards_standard", // 007
       "idx_app_usage_app",
       "idx_app_usage_child",
       "idx_app_usage_date",
       "idx_app_usage_unique", // 004
+      "idx_audit_log_at", // 009
       "idx_child_app_access_app",
       "idx_child_app_access_child",
       "idx_children_parent",
       "idx_children_school",
       "idx_school_invites_school", // 004
+      "idx_school_licenses_school_app", // 008
+      "idx_usage_daily_day", // 009
       "idx_users_school",
     ]);
 
@@ -271,6 +275,8 @@ describe("migration 003_auth on a populated database", () => {
   async function resetToPhase1() {
     await run([
       "PRAGMA defer_foreign_keys = ON",
+      // Phase 5 tables hold seeded rows that reference apps; they go first.
+      "DROP TABLE app_standards", "DROP TABLE school_licenses", "DROP TABLE usage_daily",
       "DROP TABLE app_usage", "DROP TABLE child_app_access", "DROP TABLE children",
       "DROP TABLE parents", "DROP TABLE users", "DROP TABLE schools", "DROP TABLE apps",
     ]);

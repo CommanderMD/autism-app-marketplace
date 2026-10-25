@@ -142,10 +142,23 @@ describe("UI assets", () => {
 describe("UI child-data rules (A4)", () => {
   it("no module touches localStorage/sessionStorage or builds HTML from strings", async () => {
     for (const path of JS_FILES) {
-      const source = stripComments(path, await text(path));
+      let source = stripComments(path, await text(path));
+      // Phase 5 exception, narrow on purpose: sign-out may DELETE the Act 1
+      // offline store and caches (that is A4 working, not a leak). Nothing may
+      // be read from or written to storage here.
+      if (path === "/js/session.js") {
+        expect(source).toContain("indexedDB.deleteDatabase('act1-offline')");
+        source = source.replace("indexedDB.deleteDatabase('act1-offline')", "").replace("'indexedDB' in globalThis", "");
+      }
       expect(source, path).not.toMatch(/localStorage|sessionStorage|indexedDB/);
       expect(source, path).not.toMatch(/innerHTML|outerHTML|insertAdjacentHTML|document\.write/);
     }
+    // i18n.js keeps exactly one thing in localStorage: the language code.
+    const i18n = stripComments("/js/i18n.js", await text("/js/i18n.js"));
+    expect(i18n).toContain("const STORAGE_KEY = 'lang'");
+    const uses = i18n.match(/localStorage\.\w+\([^)]*\)/g) || [];
+    expect(uses).toEqual(["localStorage.getItem(STORAGE_KEY)", "localStorage.setItem(STORAGE_KEY, code)"]);
+    expect(i18n).not.toMatch(/sessionStorage|indexedDB|innerHTML/);
   });
 
   it("only ui.js creates DOM nodes", async () => {

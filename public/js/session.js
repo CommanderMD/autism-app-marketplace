@@ -53,11 +53,27 @@ export async function requireRole(role) {
   return null;
 }
 
+// Sign-out also empties what the Act 1 service worker and offline queue hold
+// on this device (cached gate page and settings/progress answers, queued
+// progress rows), so nothing from the session outlives it on a shared device.
+async function forgetDevice() {
+  try {
+    if ('caches' in globalThis) {
+      const keys = await caches.keys();
+      await Promise.all(keys.map((k) => caches.delete(k)));
+    }
+  } catch { /* nothing cached */ }
+  try {
+    if ('indexedDB' in globalThis) indexedDB.deleteDatabase('act1-offline');
+  } catch { /* nothing queued */ }
+}
+
 export async function signOut() {
   try {
     await api('/auth/logout', { method: 'POST' });
   } finally {
     mePromise = null;
+    await forgetDevice();
     location.assign('/');
   }
 }

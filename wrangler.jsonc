@@ -27,5 +27,15 @@
   },
   "observability": {
     "enabled": true
+  },
+  // Phase 5: custom domain. The techsmartinc.com zone is on this account, so
+  // `wrangler deploy` creates the DNS record and certificate itself.
+  "routes": [
+    { "pattern": "autism.techsmartinc.com", "custom_domain": true }
+  ],
+  // Nightly usage rollup (src/rollup.js), 03:15 UTC, after the US day has
+  // closed everywhere. Phase 5.
+  "triggers": {
+    "crons": ["15 3 * * *"]
   }
 }

@@ -7,16 +7,16 @@
 import { ApiError } from './api.js';
 import { getMe, dashboardFor, loginUrl, signOut } from './session.js';
 import { el, replace, notice } from './ui.js';
+import { initI18n, t, languageSwitcher } from './i18n.js';
 
-const SITE = 'Autism App Marketplace';
-
+// Route titles are i18n keys (see /i18n/en.json "titles").
 const ROUTES = [
-  { pattern: /^\/$/, module: './views/storefront.js', title: 'Apps' },
-  { pattern: /^\/app\/([^/]+)$/, module: './views/app-detail.js', title: 'App details' },
-  { pattern: /^\/login$/, module: './views/login.js', title: 'Sign in' },
-  { pattern: /^\/parent$/, module: './views/parent.js', title: 'Parent dashboard' },
-  { pattern: /^\/school$/, module: './views/school.js', title: 'School dashboard' },
-  { pattern: /^\/admin$/, module: './views/admin.js', title: 'Platform admin' },
+  { pattern: /^\/$/, module: './views/storefront.js', title: 'titles.apps' },
+  { pattern: /^\/app\/([^/]+)$/, module: './views/app-detail.js', title: 'titles.app_details' },
+  { pattern: /^\/login$/, module: './views/login.js', title: 'titles.sign_in' },
+  { pattern: /^\/parent$/, module: './views/parent.js', title: 'titles.parent' },
+  { pattern: /^\/school$/, module: './views/school.js', title: 'titles.school' },
+  { pattern: /^\/admin$/, module: './views/admin.js', title: 'titles.admin' },
 ];
 
 // '/parent.html', '/parent/', '/index.html' all resolve like their clean path.
@@ -45,7 +45,8 @@ export function resolve(pathname) {
 }
 
 export function setTitle(title) {
-  document.title = title ? `${title} - ${SITE}` : SITE;
+  const site = t('common.site');
+  document.title = title ? `${title} - ${site}` : site;
 }
 
 function renderError(main, title, message, links = []) {
@@ -57,21 +58,29 @@ function renderError(main, title, message, links = []) {
 }
 
 export function renderNotFound(main) {
-  renderError(main, 'Page not found', 'There is no page at this address.', [{ href: '/', label: 'Back to all apps' }]);
+  renderError(main, t('errors.not_found_title'), t('errors.not_found'), [{ href: '/', label: t('common.back_to_apps') }]);
 }
 
 // Turns any failure into a visible message. 401/403 get specific guidance.
 export function renderFailure(main, err) {
   if (err instanceof ApiError && err.status === 401) {
-    renderError(main, 'Please sign in', 'Your session has ended or you are not signed in.',
-      [{ href: loginUrl(location.pathname + location.search), label: 'Sign in' }]);
+    renderError(main, t('errors.sign_in_title'), t('errors.sign_in'),
+      [{ href: loginUrl(location.pathname + location.search), label: t('common.sign_in') }]);
   } else if (err instanceof ApiError && err.status === 403) {
-    renderError(main, 'No access', 'Your account does not have access to this page.',
-      [{ href: '/', label: 'Back to all apps' }]);
+    renderError(main, t('errors.no_access_title'), t('errors.no_access'),
+      [{ href: '/', label: t('common.back_to_apps') }]);
   } else {
-    const message = err instanceof ApiError ? err.message : 'Something went wrong while showing this page.';
-    renderError(main, 'Something went wrong', message,
-      [{ href: location.pathname + location.search, label: 'Try again' }, { href: '/', label: 'Back to all apps' }]);
+    const message = err instanceof ApiError ? err.message : t('errors.wrong');
+    renderError(main, t('errors.wrong_title'), message,
+      [{ href: location.pathname + location.search, label: t('common.try_again') }, { href: '/', label: t('common.back_to_apps') }]);
+  }
+}
+
+// Static shell text carries data-i18n="key"; translated in place after the
+// language is known. English stays in the HTML as the no-JS fallback.
+function translateStatic() {
+  for (const node of document.querySelectorAll('[data-i18n]')) {
+    node.textContent = t(node.dataset.i18n);
   }
 }
 
@@ -89,9 +98,10 @@ async function enhanceNav(path) {
     const signIn = list.querySelector('[data-nav="sign-in"]');
     if (signIn) signIn.remove();
     list.append(
-      el('li', {}, el('a', { href: dashboardFor(user.role) }, 'Dashboard')),
-      el('li', {}, el('button', { type: 'button', class: 'link', onClick: () => signOut() }, 'Sign out')));
+      el('li', {}, el('a', { href: dashboardFor(user.role) }, t('common.dashboard'))),
+      el('li', {}, el('button', { type: 'button', class: 'link', onClick: () => signOut() }, t('common.sign_out'))));
   }
+  list.append(el('li', { class: 'nav-lang' }, languageSwitcher()));
   for (const link of list.querySelectorAll('a')) {
     if (normalizePath(new URL(link.href).pathname) === path) link.setAttribute('aria-current', 'page');
     else link.removeAttribute('aria-current');
@@ -101,6 +111,8 @@ async function enhanceNav(path) {
 async function boot() {
   const main = document.getElementById('main');
   const status = document.getElementById('page-status');
+  await initI18n().catch(() => { /* English strings are the built-in fallback */ });
+  translateStatic();
   const route = resolve(location.pathname);
   enhanceNav(route ? route.path : normalizePath(location.pathname));
 
@@ -109,23 +121,22 @@ async function boot() {
     return;
   }
 
-  setTitle(route.title);
-  status.textContent = 'Loading…';
+  setTitle(t(route.title));
+  status.textContent = t('common.loading');
 
   let view;
   try {
     view = await import(route.module);
   } catch {
     status.textContent = '';
-    renderError(main, 'This page could not be loaded',
-      'Part of the page failed to download. Check your connection and reload.',
-      [{ href: location.pathname + location.search, label: 'Reload' }, { href: '/', label: 'Back to all apps' }]);
+    renderError(main, t('errors.load_title'), t('errors.load'),
+      [{ href: location.pathname + location.search, label: t('common.reload') }, { href: '/', label: t('common.back_to_apps') }]);
     return;
   }
 
   try {
     await view.render({ main, params: route.params, setTitle, status });
-    if (status.textContent === 'Loading…') status.textContent = '';
+    if (status.textContent === t('common.loading')) status.textContent = '';
   } catch (err) {
     status.textContent = '';
     renderFailure(main, err);

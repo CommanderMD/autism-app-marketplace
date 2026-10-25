@@ -9,13 +9,6 @@
 <body>
   <p>Debug harness: lesson 01 render descriptors, loaded as native ES modules.</p>
   <pre id="out">loading…</pre>
-  <script type="module">
-    import lesson from './lessons/01-shapes.js';
-    const total = lesson.steps.length;
-    const descriptors = lesson.steps.map((step, index) => lesson.render(step, {
-      index, total, settings: {}, isFirst: index === 0, isLast: index === total - 1,
-    }));
-    document.getElementById('out').textContent = JSON.stringify(descriptors, null, 2);
-  </script>
+  <script type="module" src="/apps/act1/js/dev.js"></script>
 </body>
 </html>

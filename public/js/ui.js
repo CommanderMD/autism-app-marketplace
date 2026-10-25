@@ -1,3 +1,5 @@
+import { t } from './i18n.js';
+
 // Shared DOM helpers. This is the only module that creates DOM nodes; views
 // compose these. Text is always set with textContent, never innerHTML, so a
 // name from the API can never become markup.
@@ -133,8 +135,8 @@ export async function busy(button, task) {
 }
 
 export function ageRange(app) {
-  if (app.age_min == null && app.age_max == null) return 'All ages';
-  if (app.age_max == null) return `Ages ${app.age_min}+`;
-  if (app.age_min == null) return `Up to age ${app.age_max}`;
-  return `Ages ${app.age_min}-${app.age_max}`;
+  if (app.age_min == null && app.age_max == null) return t('age.all');
+  if (app.age_max == null) return t('age.from', { min: app.age_min });
+  if (app.age_min == null) return t('age.upto', { max: app.age_max });
+  return t('age.range', { min: app.age_min, max: app.age_max });
 }

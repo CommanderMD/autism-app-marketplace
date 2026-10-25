@@ -1,14 +1,19 @@
 import { json, readJson } from '../http.js';
+import { requireSeats } from './licenses.js';
 
 const CHILD_COLUMNS = 'id, name, birth_date, graduation_date, school_id, parent_id, created_at, updated_at';
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 const ACCESS_COLUMNS = 'child_id, app_id, granted_by, granted_at, expires_at, is_active';
 
-// Upsert tail for child_app_access grants. Active grants are left untouched
-// (meta.changes = 0); revoked ones are switched back on (meta.changes = 1).
+// Upsert tail for child_app_access grants. Live grants are left untouched
+// (meta.changes = 0); revoked ones AND expired-but-still-active ones are
+// switched back on with expires_at cleared (meta.changes = 1). Phase 4 carry-
+// forward: before this, an expired grant could never be re-granted because the
+// row was is_active = 1 and the upsert skipped it, leaving expires_at in the past.
 export const REACTIVATE_ON_CONFLICT = `ON CONFLICT (child_id, app_id) DO UPDATE
-  SET is_active = 1, granted_by = excluded.granted_by, granted_at = CURRENT_TIMESTAMP
-  WHERE child_app_access.is_active = 0`;
+  SET is_active = 1, granted_by = excluded.granted_by, granted_at = CURRENT_TIMESTAMP, expires_at = NULL
+  WHERE child_app_access.is_active = 0
+     OR (child_app_access.expires_at IS NOT NULL AND datetime(child_app_access.expires_at) <= CURRENT_TIMESTAMP)`;
 
 // Ownership scope as a SQL fragment, so rows the caller does not own are never
 // read from D1. A school_admin with no school matches nothing (NULL = NULL is false).
@@ -141,8 +146,21 @@ export async function handleGrantApp(request, env, user, id) {
   const app = await env.DB.prepare('SELECT 1 AS found FROM apps WHERE id = ? AND is_active = 1').bind(appId).first();
   if (!app) return json({ error: 'App not found' }, 404);
 
-  // Idempotent on UNIQUE(child_id, app_id): a repeat grant of an active app
-  // changes nothing. A revoked grant (is_active = 0) is reactivated.
+  // Funding (Phase 5): a child of a school takes one of the school's seats
+  // unless they already hold a live grant for this app. A child with no
+  // school is self-funded and never seat-checked.
+  if (child.school_id) {
+    const live = await env.DB
+      .prepare(`SELECT 1 AS found FROM child_app_access a WHERE a.child_id = ? AND a.app_id = ? AND ${GRANT_LIVE}`)
+      .bind(child.id, appId).first();
+    if (!live) {
+      const denied = await requireSeats(env, child.school_id, appId, 1);
+      if (denied) return denied;
+    }
+  }
+
+  // Idempotent on UNIQUE(child_id, app_id): a repeat grant of a live app
+  // changes nothing. A revoked or expired grant is reactivated.
   const result = await env.DB
     .prepare(`INSERT INTO child_app_access (child_id, app_id, granted_by) VALUES (?, ?, ?)
               ${REACTIVATE_ON_CONFLICT}`)

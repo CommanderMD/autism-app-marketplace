@@ -4,15 +4,40 @@
 import { api, ApiError } from '../api.js';
 import { getMe } from '../session.js';
 import { el, replace, field, liveRegion, announce, busy, notice, ageRange } from '../ui.js';
+import { t } from '../i18n.js';
 
 function details(app) {
   const rows = [
-    ['Category', app.category],
-    ['Subcategory', app.subcategory || 'Not set'],
-    ['Age range', ageRange(app)],
-    ['Difficulty', app.difficulty_level ? `${app.difficulty_level} of 5` : 'Not set'],
+    [t('detail.category'), app.category],
+    [t('detail.subcategory'), app.subcategory || t('common.not_set')],
+    [t('detail.age_range'), ageRange(app)],
+    [t('detail.difficulty'), app.difficulty_level ? t('detail.difficulty_of', { level: app.difficulty_level }) : t('common.not_set')],
   ];
   return el('dl', { class: 'dl' }, rows.flatMap(([k, v]) => [el('dt', {}, k), el('dd', {}, v)]));
+}
+
+// IEP / learning goals (Phase 5): GET /apps/:id/standards, public, no child
+// data. Shown to everyone so a parent or teacher can see what the app works
+// on before granting it.
+async function goalsSection(app) {
+  let data;
+  try {
+    data = await api(`/apps/${encodeURIComponent(app.id)}/standards`);
+  } catch {
+    return null;
+  }
+  const items = data.standards;
+  const lessonNumber = (id) => (id ? Number(id.split('-')[0]) : null);
+  return el('section', { class: 'panel stack goals', 'aria-labelledby': 'goals-heading' },
+    el('h2', { id: 'goals-heading' }, t('detail.goals_heading')),
+    el('p', { class: 'muted' }, t('detail.goals_intro')),
+    items.length === 0
+      ? el('p', {}, t('detail.goals_none'))
+      : el('ul', { class: 'goal-list' }, items.map((g) => el('li', {},
+        el('strong', {}, g.goal),
+        g.lesson_id ? el('span', { class: 'tag' }, t('detail.lesson_n', { n: lessonNumber(g.lesson_id) })) : null,
+        el('span', { class: 'tag domain' }, g.domain),
+        g.description ? el('p', { class: 'muted' }, g.description) : null))));
 }
 
 // The picker is built only after the parent asks for it, from a fresh
@@ -20,7 +45,7 @@ function details(app) {
 function parentGrant(app) {
   const live = liveRegion();
   const area = el('div', { class: 'panel stack' });
-  const open = el('button', { type: 'button', 'aria-expanded': 'false' }, 'Add to my child');
+  const open = el('button', { type: 'button', 'aria-expanded': 'false' }, t('detail.add_to_child'));
 
   open.addEventListener('click', () => busy(open, async () => {
     try {
@@ -28,15 +53,15 @@ function parentGrant(app) {
       open.setAttribute('aria-expanded', 'true');
       open.hidden = true;
       if (children.length === 0) {
-        replace(area, el('p', {}, 'You have no children added yet. ',
-          el('a', { href: '/parent' }, 'Add a child on your dashboard'), '.'), live);
+        replace(area, el('p', {}, t('detail.no_children'),
+          el('a', { href: '/parent' }, t('detail.add_on_dashboard')), '.'), live);
         return;
       }
       const picker = field({
-        label: 'Which child?', name: 'child', kind: 'select',
+        label: t('detail.which_child'), name: 'child', kind: 'select',
         options: children.map((c) => ({ value: c.id, label: c.name })),
       });
-      const submit = el('button', { type: 'submit' }, 'Grant app');
+      const submit = el('button', { type: 'submit' }, t('detail.grant'));
       const form = el('form', { class: 'form-row', novalidate: true }, picker.wrap, submit);
       form.addEventListener('submit', (event) => {
         event.preventDefault();
@@ -46,7 +71,7 @@ function parentGrant(app) {
             await api(`/api/children/${encodeURIComponent(picker.input.value)}/apps`, {
               method: 'POST', body: { app_id: app.id },
             });
-            announce(live, `${app.name} is now available to ${child.textContent}.`);
+            announce(live, t('detail.granted_to', { app: app.name, child: child.textContent }));
           } catch (err) {
             announce(live, err.message);
           }
@@ -83,12 +108,12 @@ async function parentPlayLinks(app) {
   }
   if (withApp.length === 0) return null;
   return el('div', { class: 'panel stack' },
-    el('p', {}, withApp.length === 1 ? 'Ready to play:' : 'Ready to play as:'),
+    el('p', {}, withApp.length === 1 ? t('detail.ready_one') : t('detail.ready_many')),
     el('ul', { class: 'stack' }, withApp.map((child) => el('li', {},
       el('a', {
         class: 'btn',
         href: `/apps/${encodeURIComponent(app.id)}/play?child_id=${encodeURIComponent(child.id)}`,
-      }, `Play as ${child.name}`)))));
+      }, t('detail.play_as', { child: child.name }))))));
 }
 
 export async function render({ main, params, setTitle }) {
@@ -98,11 +123,11 @@ export async function render({ main, params, setTitle }) {
     app = await api(`/apps/${encodeURIComponent(id)}`);
   } catch (err) {
     if (err instanceof ApiError && err.status === 404) {
-      setTitle('App not found');
+      setTitle(t('detail.not_found_title'));
       replace(main,
-        el('h1', {}, 'App not found'),
-        el('p', {}, 'There is no app at this address. It may have been removed or the link may be mistyped.'),
-        el('p', {}, el('a', { href: '/' }, 'Back to all apps')));
+        el('h1', {}, t('detail.not_found_title')),
+        el('p', {}, t('detail.not_found')),
+        el('p', {}, el('a', { href: '/' }, t('common.back_to_apps'))));
       return;
     }
     throw err;
@@ -113,21 +138,22 @@ export async function render({ main, params, setTitle }) {
 
   let action = null;
   if (!app.is_active) {
-    action = notice('This app is not currently available to grant.');
+    action = notice(t('detail.not_available'));
   } else if (user && user.role === 'parent') {
     action = el('div', { class: 'stack' }, await parentPlayLinks(app), parentGrant(app));
   } else if (user && user.role === 'school_admin') {
-    action = el('p', {}, el('a', { class: 'btn', href: '/school' }, 'Grant to children'));
+    action = el('p', {}, el('a', { class: 'btn', href: '/school' }, t('detail.grant_to_children')));
   } else if (!user) {
-    action = el('p', { class: 'muted' }, 'Parents and schools can ',
-      el('a', { href: `/login?next=${encodeURIComponent(location.pathname)}` }, 'sign in'),
-      ' to give this app to a child.');
+    action = el('p', { class: 'muted' }, t('detail.parents_and_schools'),
+      el('a', { href: `/login?next=${encodeURIComponent(location.pathname)}` }, t('common.sign_in').toLowerCase()),
+      t('detail.to_give'));
   }
 
   replace(main,
-    el('p', {}, el('a', { href: '/' }, 'All apps')),
+    el('p', {}, el('a', { href: '/' }, t('common.all_apps'))),
     el('h1', {}, app.name),
     app.description ? el('p', {}, app.description) : null,
     details(app),
+    await goalsSection(app),
     action);
 }

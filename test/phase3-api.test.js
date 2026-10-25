@@ -64,6 +64,14 @@ function daysAgo(n) {
   return new Date(Date.now() - n * 86400000).toISOString().slice(0, 10);
 }
 
+// Phase 5: a school child needs a seat on a current license before a grant.
+async function seedLicense(schoolId, appId, seats) {
+  await env.DB
+    .prepare("INSERT INTO school_licenses (id, school_id, app_id, seats, starts_at) VALUES (?, ?, ?, ?, date('now'))")
+    .bind(crypto.randomUUID(), schoolId, appId, seats)
+    .run();
+}
+
 async function seedUsage(childId, appId, sessionDate, minutes, activities, score = null) {
   await env.DB
     .prepare("INSERT INTO app_usage (child_id, app_id, session_date, minutes_used, activities_completed, score) VALUES (?, ?, ?, ?, ?, ?)")
@@ -316,8 +324,10 @@ describe("GET /api/children/:id/apps", () => {
 
 describe("POST /api/school/children/apps (bulk grant)", () => {
   it("grants, is idempotent, and rejects other schools' children without inserting anything", async () => {
-    const { cookie: adminCookie1 } = await registerAndLogin("admin.b1@example.test", "school_admin", { school_name: "Test School B1" });
+    const { cookie: adminCookie1, user: admin1 } = await registerAndLogin("admin.b1@example.test", "school_admin", { school_name: "Test School B1" });
     const { cookie: adminCookie2 } = await registerAndLogin("admin.b2@example.test", "school_admin", { school_name: "Test School B2" });
+    await seedLicense(admin1.school_id, "word-builder", 3);
+    await seedLicense(admin1.school_id, "emotion-match", 10);
     const kids = [];
     for (const n of [1, 2, 3]) kids.push(await createChild(adminCookie1, `Test Child B${n}`));
     const foreign = await createChild(adminCookie2, "Test Child F");

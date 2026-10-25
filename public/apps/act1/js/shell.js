@@ -17,6 +17,8 @@ import { createRewardPlayer } from './reward-player.js';
 import { createSettingsPanel, resolveInitial, readLocal, applyToDocument, APP_ID, readGuidePref, writeGuidePref } from './settings-panel.js';
 import { svgNode } from './svg-dom.js';
 import { createCompanion, preloadGuide, celebrationRow, arrivalLine, GUIDE_NAME } from './companion.js';
+import { initI18n, t, tr, speechLang } from '/js/i18n.js';
+import { enqueue, flush as flushOffline, queueLength } from './offline-queue.js';
 
 const LESSON_ID_RE = /^[a-z0-9-]+$/;
 const MAX_SECONDS = 600;
@@ -29,9 +31,32 @@ const prefersReducedMotion = typeof matchMedia === 'function' && matchMedia('(pr
 function grownUpPanel() {
   applyToDocument({ safe_mode: true, animations: true, contrast: 'normal', animation_speed: 1 });
   replace(main, el('section', { class: 'panel' },
-    el('h1', {}, 'This app needs a grown-up.'),
-    el('p', {}, 'Ask a grown-up to open Act 1 from your apps page.'),
-    el('a', { class: 'next', href: '/parent' }, 'Back to my apps')));
+    el('h1', {}, t('act1.grownup_heading')),
+    el('p', {}, t('act1.grownup_body')),
+    el('a', { class: 'next', href: '/parent' }, t('act1.back_to_my_apps'))));
+}
+
+// Offline (Phase 5): the service worker caches the shell, the lessons, the
+// sprites and the last good settings/progress answers; progress that cannot
+// be posted waits in IndexedDB (offline-queue.js). Registration failing is
+// not an error the child should see: the app simply needs the network.
+function registerServiceWorker(childId) {
+  if (!('serviceWorker' in navigator)) return;
+  navigator.serviceWorker.register('/sw.js')
+    .then(() => navigator.serviceWorker.ready)
+    .then((reg) => {
+      // First visit: the page loaded before the worker took control, so ask
+      // it to cache this gate page and the two boot answers now.
+      const target = reg.active || navigator.serviceWorker.controller;
+      if (!target) return;
+      const id = encodeURIComponent(childId);
+      target.postMessage({ type: 'warm', urls: [
+        location.pathname + location.search,
+        `/api/children/${id}/settings?app_id=${APP_ID}`,
+        `/api/children/${id}/progress?app_id=${APP_ID}`,
+      ] });
+    })
+    .catch(() => { /* no offline support here */ });
 }
 
 // ---------------------------------------------------------------- speech
@@ -44,7 +69,7 @@ const speech = {
     try {
       speechSynthesis.cancel();
       const u = new SpeechSynthesisUtterance(text);
-      u.lang = 'en-US';
+      u.lang = speechLang(); // spoken audio follows the UI language
       u.rate = 0.9;
       u.onstart = () => this.onSpeaking && this.onSpeaking(true);
       u.onend = () => this.onSpeaking && this.onSpeaking(false);
@@ -60,12 +85,15 @@ const speech = {
 // ---------------------------------------------------------------- boot
 
 async function boot() {
+  await initI18n().catch(() => { /* English strings are built in as the fallback */ });
+  document.title = t('act1.title');
   const meta = document.querySelector('meta[name="child-id"]');
   const childId = meta ? meta.content.trim() : '';
   if (!childId) {
     grownUpPanel();
     return;
   }
+  registerServiceWorker(childId);
 
   let settingsRow;
   let progress;
@@ -108,7 +136,7 @@ function createApp({ childId, settings: initialSettings, completed }) {
   let stepShownAt = 0;
   let settings = { ...initialSettings };
   const reported = new Set();   // `${lessonId}:${stepId}` already POSTed
-  const queue = [];             // failed POST bodies, retried on the next success
+  let queued = 0;               // bodies waiting in IndexedDB (shown as a badge)
   let picks = [];               // sequence mode picks / drag mode placed ids
   let selectedDragId = null;    // tap-fallback for drag
   let rewarding = false;        // true while a task reward plays; Next waits
@@ -173,15 +201,33 @@ function createApp({ childId, settings: initialSettings, completed }) {
   }
 
   // ---- progress reporting (never interrupts the child)
-  function post(body) {
-    return api('/api/progress', { method: 'POST', body }).catch(() => { queue.push(body); });
-  }
-  async function flushQueue() {
-    while (queue.length) {
-      const body = queue.shift();
-      try { await api('/api/progress', { method: 'POST', body }); } catch { queue.unshift(body); break; }
+  // A failed POST (offline, or the server is down) goes to the IndexedDB
+  // queue and is retried in order when the browser says it is online again.
+  const send = (body) => api('/api/progress', { method: 'POST', body });
+  async function post(body) {
+    try {
+      await send(body);
+    } catch (err) {
+      const status = err instanceof ApiError ? err.status : 0;
+      if (status === 0 || status >= 500) {
+        await enqueue(body).catch(() => { /* no IndexedDB: this step is lost, the child is not */ });
+        await refreshQueued();
+      }
     }
   }
+  async function flushQueue() {
+    try {
+      await flushOffline(send);
+    } catch { /* still offline */ }
+    await refreshQueued();
+  }
+  async function refreshQueued() {
+    const n = await queueLength().catch(() => 0);
+    if (n !== queued) { queued = n; render(false); }
+  }
+  window.addEventListener('online', () => { flushQueue(); });
+  window.addEventListener('offline', () => render(false));
+  flushQueue();
   function secondsOnStep() {
     return Math.max(0, Math.min(MAX_SECONDS, Math.round((Date.now() - stepShownAt) / 1000)));
   }
@@ -260,28 +306,36 @@ function createApp({ childId, settings: initialSettings, completed }) {
   function topbar(lesson, view) {
     const pct = view.progress.total ? Math.round(((view.progress.index) / view.progress.total) * 100) : 0;
     const gear = svgLike('gear');
-    const settingsBtn = el('button', { type: 'button', class: 'icon-btn', 'aria-label': 'Settings for grown-ups', 'aria-haspopup': 'dialog' }, gear, 'Settings');
+    const fill = el('span');
+    fill.style.width = `${pct}%`; // CSSOM, not a style attribute: the CSP has no unsafe-inline
+    const settingsBtn = el('button', { type: 'button', class: 'icon-btn', 'aria-label': t('act1.settings_label'), 'aria-haspopup': 'dialog' }, gear, t('act1.settings'));
     settingsBtn.addEventListener('click', () => panel.toggle());
+    // A quiet badge for the adult: offline, or steps saved on this device.
+    const offline = typeof navigator !== 'undefined' && navigator.onLine === false;
+    const badge = offline || queued > 0
+      ? el('span', { class: 'offline-badge', role: 'status' }, offline ? t('act1.offline_badge') : t('act1.saved_on_device'))
+      : null;
     return el('header', { class: 'topbar' },
       el('div', {},
-        el('h1', { class: 'lesson-title' }, `Lesson ${lesson.order}: ${lesson.title}`),
-        el('div', { class: 'progress', 'aria-label': 'Progress' },
-          el('span', {}, `${view.progress.index + 1} of ${view.progress.total}`),
+        el('h1', { class: 'lesson-title' }, t('act1.lesson_title', { order: lesson.order, title: tr(lesson.title) })),
+        el('div', { class: 'progress', 'aria-label': t('act1.progress') },
+          el('span', {}, t('act1.step_of', { index: view.progress.index + 1, total: view.progress.total })),
+          badge,
           el('div', { class: 'progress-bar', role: 'progressbar', 'aria-valuemin': '0', 'aria-valuemax': String(view.progress.total), 'aria-valuenow': String(view.progress.index) },
-            el('span', { style: `width:${pct}%` })))),
+            fill))),
       settingsBtn);
   }
 
   function promptRow(view) {
-    const replay = el('button', { type: 'button', class: 'icon-btn', 'aria-label': 'Hear it again' }, svgLike('speaker'));
-    replay.addEventListener('click', () => { speech.unlocked = true; speech.speak(view.audio); });
+    const replay = el('button', { type: 'button', class: 'icon-btn', 'aria-label': t('act1.hear_again') }, svgLike('speaker'));
+    replay.addEventListener('click', () => { speech.unlocked = true; speech.speak(tr(view.audio)); });
     const feedback = el('p', { class: 'feedback', id: 'feedback' },
-      state.status === 'wrong' ? 'Try again.' : state.status === 'correct' ? 'Yes!' : '');
-    if (showGuide && state.status === 'correct') feedback.textContent = `Yes! ${GUIDE_NAME} is happy.`;
+      state.status === 'wrong' ? t('act1.try_again') : state.status === 'correct' ? t('act1.yes') : '');
+    if (showGuide && state.status === 'correct') feedback.textContent = t('act1.guide_happy', { guide: GUIDE_NAME });
     const slot = showGuide ? guide.el : el('div', { class: 'companion-slot is-empty', 'aria-hidden': 'true' });
     return el('section', { class: `prompt-row${showGuide ? ' has-guide' : ''}` },
       slot,
-      el('div', {}, el('p', { class: 'prompt', id: 'prompt' }, view.prompt), feedback),
+      el('div', {}, el('p', { class: 'prompt', id: 'prompt' }, tr(view.prompt)), feedback),
       replay);
   }
 
@@ -291,7 +345,7 @@ function createApp({ childId, settings: initialSettings, completed }) {
       type: 'button', class: `choice${revealCorrect ? ' is-correct-reveal' : ''}`,
       'data-choice': c.id, 'aria-pressed': pressed ? 'true' : 'false', disabled,
       'aria-describedby': 'prompt',
-    }, pic, el('span', { class: 'label' }, c.label));
+    }, pic, el('span', { class: 'label' }, tr(c.label)));
     if (onClick) btn.addEventListener('click', onClick);
     return btn;
   }
@@ -310,11 +364,12 @@ function createApp({ childId, settings: initialSettings, completed }) {
   function dragArea(view) {
     const locked = state.status === 'correct';
     const placed = picks; // ids placed in the zone, in order
-    const tray = el('div', { class: 'tray', role: 'group', 'aria-label': 'Things to move' });
+    const zoneName = tr(view.target.zone.replace(/-/g, ' '));
+    const tray = el('div', { class: 'tray', role: 'group', 'aria-label': t('act1.things_to_move') });
     const placedBox = el('div', { class: 'placed', 'aria-live': 'polite' });
     const zoneLabel = el('span', { class: 'zone-label' },
-      state.revealAnswer ? `Put ${view.target.count} in the ${view.target.zone.replace(/-/g, ' ')}.` : `${placed.length} in the ${view.target.zone.replace(/-/g, ' ')}`);
-    const zone = el('div', { class: 'drop-zone', role: 'button', tabindex: '0', 'aria-label': `The ${view.target.zone.replace(/-/g, ' ')}. Tap to put the chosen thing here.` },
+      state.revealAnswer ? t('act1.put_in', { count: view.target.count, zone: zoneName }) : t('act1.in_zone', { count: placed.length, zone: zoneName }));
+    const zone = el('div', { class: 'drop-zone', role: 'button', tabindex: '0', 'aria-label': t('act1.zone_label', { zone: zoneName }) },
       svgNode(view.target.zone), placedBox, zoneLabel);
 
     function place(id) {
@@ -333,13 +388,13 @@ function createApp({ childId, settings: initialSettings, completed }) {
       if (placed.includes(c.id)) {
         const back = choiceButton(c, { disabled: locked, onClick: () => unplace(c.id) });
         back.classList.add('drag-item');
-        back.setAttribute('aria-label', `${c.label}, in the ${view.target.zone.replace(/-/g, ' ')}. Tap to take it out.`);
+        back.setAttribute('aria-label', t('act1.in_zone_item', { label: tr(c.label), zone: zoneName }));
         placedBox.append(back);
         continue;
       }
       const item = choiceButton(c, { pressed: selectedDragId === c.id, disabled: locked, onClick: () => { selectedDragId = selectedDragId === c.id ? null : c.id; render(false); } });
       item.classList.add('drag-item');
-      item.setAttribute('aria-label', `${c.label}. Tap to choose, then tap the ${view.target.zone.replace(/-/g, ' ')}.`);
+      item.setAttribute('aria-label', t('act1.choose_then', { label: tr(c.label), zone: zoneName }));
       attachPointerDrag(item, c.id, zone, place);
       tray.append(item);
     }
@@ -388,12 +443,12 @@ function createApp({ childId, settings: initialSettings, completed }) {
 
   function sequenceArea(view) {
     const locked = state.status === 'correct';
-    const slots = el('div', { class: 'slots', role: 'group', 'aria-label': 'Your order' },
+    const slots = el('div', { class: 'slots', role: 'group', 'aria-label': t('act1.your_order') },
       view.choices.map((_, i) => {
         const id = picks[i];
         const c = id ? view.choices.find((x) => x.id === id) : null;
         const wrong = state.revealAnswer && state.highlight === i;
-        return el('div', { class: `slot${c ? ' is-filled' : ''}${wrong ? ' is-wrong' : ''}`, 'aria-label': c ? `${i + 1}: ${c.label}` : `${i + 1}: empty` },
+        return el('div', { class: `slot${c ? ' is-filled' : ''}${wrong ? ' is-wrong' : ''}`, 'aria-label': c ? t('act1.slot_filled', { n: i + 1, label: tr(c.label) }) : t('act1.slot_empty', { n: i + 1 }) },
           c ? svgNode(c.svg) : String(i + 1));
       }));
     const row = el('div', { class: 'choices', 'data-count': String(view.choices.length), role: 'group', 'aria-labelledby': 'prompt' },
@@ -402,7 +457,7 @@ function createApp({ childId, settings: initialSettings, completed }) {
         disabled: locked || picks.includes(c.id),
         onClick: () => { if (picks.length < view.choices.length) { picks = [...picks, c.id]; render(false); } },
       })));
-    const clearBtn = el('button', { type: 'button', class: 'text-btn', disabled: locked || picks.length === 0 }, 'Start over');
+    const clearBtn = el('button', { type: 'button', class: 'text-btn', disabled: locked || picks.length === 0 }, t('act1.start_over'));
     clearBtn.addEventListener('click', () => { picks = []; if (state.revealAnswer) dispatch({ type: 'RETRY' }); else render(false); });
     return el('div', { class: 'sequence-area' }, slots, row, clearBtn);
   }
@@ -410,21 +465,21 @@ function createApp({ childId, settings: initialSettings, completed }) {
   function bottomBar(view) {
     const mode = view.mode;
     const correct = state.status === 'correct';
-    let label = 'Next';
+    let label = t('act1.next');
     let enabled = correct && !rewarding;
     let onClick = () => dispatch({ type: 'NEXT' });
     if (!correct && mode === 'drag') {
-      label = 'Check'; enabled = picks.length > 0;
+      label = t('act1.check'); enabled = picks.length > 0;
       onClick = () => dispatch({ type: 'ANSWER', answer: { count: picks.length } });
     } else if (!correct && mode === 'sequence') {
-      label = 'Check'; enabled = picks.length === view.choices.length;
+      label = t('act1.check'); enabled = picks.length === view.choices.length;
       onClick = () => dispatch({ type: 'ANSWER', answer: [...picks] });
     }
-    if (correct && state.stepIndex === currentLesson(state).steps.length - 1) label = 'Finish';
+    if (correct && state.stepIndex === currentLesson(state).steps.length - 1) label = t('act1.finish');
     const next = el('button', { type: 'button', class: 'next', disabled: !enabled }, label);
     next.addEventListener('click', onClick);
     const retry = state.revealAnswer && mode === 'tap'
-      ? el('button', { type: 'button', class: 'text-btn left' }, 'Try again')
+      ? el('button', { type: 'button', class: 'text-btn left' }, t('act1.retry'))
       : el('span', { class: 'left' });
     if (retry.tagName === 'BUTTON') retry.addEventListener('click', () => dispatch({ type: 'RETRY' }));
     return el('footer', { class: 'bottom' }, retry, next, el('span', { class: 'right' }));
@@ -450,7 +505,7 @@ function createApp({ childId, settings: initialSettings, completed }) {
 
     if (newStep) {
       guide.setState('point');
-      speech.speak(view.audio);
+      speech.speak(tr(view.audio));
       setTimeout(() => guide.setState('listen'), 1500);
     }
   }
@@ -460,8 +515,8 @@ function createApp({ childId, settings: initialSettings, completed }) {
     const nextId = state.nextLessonId;
     const stepsDone = lesson.steps.length;
     const nextBtn = nextId
-      ? el('button', { type: 'button', class: 'next' }, 'Next lesson')
-      : el('a', { class: 'next', href: '/parent' }, 'All done');
+      ? el('button', { type: 'button', class: 'next' }, t('act1.next_lesson'))
+      : el('a', { class: 'next', href: '/parent' }, t('act1.all_done'));
     if (nextId) {
       nextBtn.addEventListener('click', async () => {
         nextBtn.disabled = true;
@@ -479,14 +534,14 @@ function createApp({ childId, settings: initialSettings, completed }) {
     const completedCount = state.completed.length;
     const arrival = showGuide ? arrivalLine(completedCount) : null;
     replace(main,
-      el('header', { class: 'topbar' }, el('h1', { class: 'lesson-title' }, `Lesson ${lesson.order}: ${lesson.title}`)),
+      el('header', { class: 'topbar' }, el('h1', { class: 'lesson-title' }, t('act1.lesson_title', { order: lesson.order, title: tr(lesson.title) }))),
       el('section', { class: 'panel' },
         showGuide ? celebrationRow(completedCount) : null,
-        el('h2', {}, 'You did it!'),
-        el('p', {}, `${stepsDone} of ${stepsDone} done.`),
-        arrival ? el('p', { class: 'arrival' }, arrival) : null,
+        el('h2', {}, t('act1.you_did_it')),
+        el('p', {}, t('act1.done_of', { done: stepsDone })),
+        arrival ? el('p', { class: 'arrival' }, tr(arrival)) : null,
         nextBtn));
-    speech.speak(arrival ? `You did it! ${arrival}` : 'You did it!');
+    speech.speak(arrival ? `${t('act1.you_did_it')} ${tr(arrival)}` : t('act1.you_did_it'));
   }
 
   return { start };
