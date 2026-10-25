@@ -31,7 +31,15 @@ export function writeGuidePref(on) {
   try { localStorage.setItem(GUIDE_KEY, on ? 'on' : 'off'); } catch { /* ignore */ }
 }
 export const DEBOUNCE_MS = 400;
-export const APP_ID = 'act1-sensory-learning';
+
+// The app id comes from the launch gate's <meta name="app-id">, so settings
+// and progress are read and written under the app that was actually launched.
+// The fallback exists only for pages the gate does not serve (dev.html).
+const FALLBACK_APP_ID = 'act1-sensory-learning';
+export function getAppId() {
+  const meta = globalThis.document?.querySelector('meta[name="app-id"]');
+  return meta?.content?.trim() || FALLBACK_APP_ID;
+}
 
 export const DEFAULT_SETTINGS = Object.freeze({
   volume: 60,
@@ -118,7 +126,7 @@ export function createSettingsPanel({ childId, initial, onChange, onTestSound, g
 
   function flush() {
     timer = null;
-    const body = { app_id: APP_ID, ...pending };
+    const body = { app_id: getAppId(), ...pending };
     pending = {};
     if (Object.keys(body).length === 1) return;
     api(`/api/children/${encodeURIComponent(childId)}/settings`, { method: 'PUT', body })

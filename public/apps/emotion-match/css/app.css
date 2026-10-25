@@ -1,0 +1,22 @@
+/* Emotion Matcher placeholder styles. The Emotion Matcher build owns this file. */
+:root {
+  --bg: #ffffff;
+  --fg: #1a1a1a; /* 17.4:1 on --bg */
+  --hit: 44px;
+}
+* { box-sizing: border-box; }
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--fg);
+  font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  font-size: 1.25rem;
+  line-height: 1.5;
+}
+#app { display: grid; place-items: center; min-height: 100vh; padding: 24px; }
+h1 { margin: 0; font-size: 2rem; text-align: center; }
+a, button { min-height: var(--hit); min-width: var(--hit); }
+:focus-visible { outline: 3px solid var(--fg); outline-offset: 3px; }
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation: none !important; transition: none !important; }
+}

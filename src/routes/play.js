@@ -5,12 +5,20 @@ import { loadOwnedChild, GRANT_LIVE } from './children.js';
 
 // Server-side launch gate for GET /apps/:appId/play?child_id=.
 //
-// The shell and the denial page live under /apps/act1/, a path the router
-// answers with JSON 404, so they are only ever reachable through this handler.
-// Asset paths are the asset layer's clean URLs: with the default html_handling,
+// Each app's shell lives under /apps/<dir>/, a path the router answers with
+// JSON 404, so shells are only ever reachable through this handler. Asset
+// paths are the asset layer's clean URLs: with the default html_handling,
 // /apps/act1/index.html redirects to /apps/act1/ and denied.html to denied.
-const SHELL_PATH = '/apps/act1/';
-const DENIED_PATH = '/apps/act1/denied';
+//
+// An active app with no entry here is a 404, never another app's shell: one
+// shared shell path for every app id is how every app once served Act 1.
+const SHELLS = Object.freeze({
+  'act1-sensory-learning': { shell: '/apps/act1/', denied: '/apps/act1/denied' },
+  'money-bingo':           { shell: '/apps/money-bingo/', denied: '/apps/act1/denied' },
+  'word-builder':          { shell: '/apps/word-builder/', denied: '/apps/act1/denied' },
+  'emotion-match':         { shell: '/apps/emotion-match/', denied: '/apps/act1/denied' },
+  'pattern-puzzles':       { shell: '/apps/pattern-puzzles/', denied: '/apps/act1/denied' },
+});
 
 // no-store: the gate's answer depends on the session and on a grant that can
 // expire. no-referrer: the page URL carries child_id; keep it out of Referer.
@@ -20,7 +28,7 @@ const PAGE_HEADERS = {
   'Referrer-Policy': 'no-referrer',
 };
 
-async function servePage(env, request, assetPath, status, childId) {
+async function servePage(env, request, assetPath, status, childId, appId) {
   if (!env.ASSETS) return json({ error: 'Assets binding not configured' }, 500);
   const asset = await env.ASSETS.fetch(new Request(new URL(assetPath, request.url)));
   if (!asset.ok) {
@@ -28,11 +36,13 @@ async function servePage(env, request, assetPath, status, childId) {
     return json({ error: 'Internal error' }, 500);
   }
   let page = new Response(asset.body, { status, headers: PAGE_HEADERS });
-  // The child id reaches the page only through the shell's own
-  // <meta name="child-id">; if the shell has no such tag, nothing is added.
+  // The child id and app id reach the page only through the shell's own
+  // <meta name="child-id"> and <meta name="app-id">, both set in this one
+  // pass; if the shell has no such tag, nothing is added.
   if (childId) {
     page = new HTMLRewriter()
       .on('meta[name="child-id"]', { element: (el) => el.setAttribute('content', childId) })
+      .on('meta[name="app-id"]', { element: (el) => el.setAttribute('content', appId) })
       .transform(page);
   }
   return page;
@@ -40,6 +50,8 @@ async function servePage(env, request, assetPath, status, childId) {
 
 export async function handlePlay(request, env, appId) {
   if (!(await isActiveApp(env.DB, appId))) return json({ error: 'App not found' }, 404);
+  const paths = Object.hasOwn(SHELLS, appId) ? SHELLS[appId] : null;
+  if (!paths) return json({ error: 'App not found' }, 404);
 
   const url = new URL(request.url);
   const user = await getCurrentUser(request, env);
@@ -63,7 +75,7 @@ export async function handlePlay(request, env, appId) {
     .prepare(`SELECT 1 AS live FROM child_app_access a WHERE a.child_id = ? AND a.app_id = ? AND ${GRANT_LIVE}`)
     .bind(child.id, appId)
     .first();
-  if (!grant) return servePage(env, request, DENIED_PATH, 403, null);
+  if (!grant) return servePage(env, request, paths.denied, 403, null, null);
 
-  return servePage(env, request, SHELL_PATH, 200, child.id);
+  return servePage(env, request, paths.shell, 200, child.id, appId);
 }
